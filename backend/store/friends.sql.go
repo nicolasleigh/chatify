@@ -85,13 +85,13 @@ func (q *Queries) DeleteFriend(ctx context.Context, id int64) error {
 }
 
 const deleteRequest = `-- name: DeleteRequest :one
-DELETE FROM friend_requests 
-WHERE sender_id = $1
+DELETE FROM friend_requests
+WHERE id = $1
 RETURNING id, sender_id, receiver_id, created_at
 `
 
-func (q *Queries) DeleteRequest(ctx context.Context, senderID int64) (FriendRequest, error) {
-	row := q.db.QueryRow(ctx, deleteRequest, senderID)
+func (q *Queries) DeleteRequest(ctx context.Context, id int64) (FriendRequest, error) {
+	row := q.db.QueryRow(ctx, deleteRequest, id)
 	var i FriendRequest
 	err := row.Scan(
 		&i.ID,
@@ -142,6 +142,22 @@ func (q *Queries) GetFriends(ctx context.Context, clerkID string) ([]User, error
 		return nil, err
 	}
 	return items, nil
+}
+
+const getRequest = `-- name: GetRequest :one
+SELECT id, sender_id, receiver_id, created_at FROM friend_requests WHERE id = $1
+`
+
+func (q *Queries) GetRequest(ctx context.Context, id int64) (FriendRequest, error) {
+	row := q.db.QueryRow(ctx, getRequest, id)
+	var i FriendRequest
+	err := row.Scan(
+		&i.ID,
+		&i.SenderID,
+		&i.ReceiverID,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const getRequests = `-- name: GetRequests :many

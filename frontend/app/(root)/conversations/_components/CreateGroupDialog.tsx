@@ -39,23 +39,25 @@ const createGroupFormSchema = z.object({
 
 export default function CreateGroupDialog() {
   const [open, setOpen] = useState(false);
-  const { userId: clerk_id } = useAuth();
+  const { getToken } = useAuth();
   const { data: friends } = useQuery({
     queryKey: ["friends"],
-    queryFn: () => {
-      if (!clerk_id) {
-        throw new Error("User not found");
+    queryFn: async () => {
+      const token = await getToken();
+      if (!token) {
+        throw new Error("User token not found");
       }
-      return getFriends({ clerk_id });
+      return getFriends({ token });
     },
   });
 
   const { mutate: create, isPending } = useMutation({
-    mutationFn: ({ name, member_id_arr }: { name: string; member_id_arr: number[] }) => {
-      if (!clerk_id) {
-        throw new Error("User ID not valid");
+    mutationFn: async ({ name, member_id_arr }: { name: string; member_id_arr: number[] }) => {
+      const token = await getToken();
+      if (!token) {
+        throw new Error("User token not found");
       }
-      return createGroup({ name, member_id_arr, clerk_id });
+      return createGroup({ name, member_id_arr, token });
     },
     onSuccess: () => {
       form.reset();

@@ -46,12 +46,15 @@ WHERE member.member_id != (SELECT id FROM clerk_users)
 
 -- name: GetConversationsByClerkId :many
 WITH clerk_users AS (
-    SELECT id 
-    FROM users 
+    SELECT id
+    FROM users
     WHERE users.clerk_id = $1
 )
 SELECT member.conversation_id FROM conversation_members member
 JOIN clerk_users ON clerk_users.id = member.member_id;
+
+-- name: GetConversationMember :one
+SELECT id FROM conversation_members WHERE conversation_id = $1 AND member_id = $2;
 
 -- name: CreateGroup :exec
 WITH 

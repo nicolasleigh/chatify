@@ -28,6 +28,9 @@ UPDATE conversation_members
 SET last_seen_message_id = $3
 WHERE conversation_id = $1 AND member_id = $2;
 
+-- name: GetMessageConversationId :one
+SELECT conversation_id FROM messages WHERE id = $1;
+
 -- name: GetConversationLastMessage :one
 SELECT sender_id, users.username as sender_username, users.image_url as sender_image_url, content, type 
 FROM messages

@@ -164,10 +164,26 @@ func (q *Queries) GetConversation(ctx context.Context, arg GetConversationParams
 	return items, nil
 }
 
+const getConversationMember = `-- name: GetConversationMember :one
+SELECT id FROM conversation_members WHERE conversation_id = $1 AND member_id = $2
+`
+
+type GetConversationMemberParams struct {
+	ConversationID int64 `json:"conversation_id"`
+	MemberID       int64 `json:"member_id"`
+}
+
+func (q *Queries) GetConversationMember(ctx context.Context, arg GetConversationMemberParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getConversationMember, arg.ConversationID, arg.MemberID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getConversationsByClerkId = `-- name: GetConversationsByClerkId :many
 WITH clerk_users AS (
-    SELECT id 
-    FROM users 
+    SELECT id
+    FROM users
     WHERE users.clerk_id = $1
 )
 SELECT member.conversation_id FROM conversation_members member

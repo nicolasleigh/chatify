@@ -33,3 +33,8 @@ func badRequestResponse(w http.ResponseWriter, err error) {
 	slog.Warn(err.Error())
 	errorResponse(w, http.StatusBadRequest, err.Error())
 }
+
+func unauthorizedResponse(w http.ResponseWriter, err error) {
+	slog.Warn(err.Error())
+	errorResponse(w, http.StatusUnauthorized, "unauthorized")
+}

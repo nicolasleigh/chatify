@@ -1,18 +1,18 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/nicolasleigh/chat-app/store"
 )
 
 func (app *application) createMessage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	var payload store.CreateMessageParams
 	var body struct {
-		SenderID       int64   `json:"sender_id"`
 		ConversationID int64   `json:"conversation_id"`
 		Type           *string `json:"type"`
 		Content        *string `json:"content"`
@@ -22,10 +22,23 @@ func (app *application) createMessage(w http.ResponseWriter, r *http.Request) {
 		badRequestResponse(w, err)
 		return
 	}
-	payload.Content = body.Content
-	payload.ID = body.ConversationID
-	payload.SenderID = body.SenderID
-	payload.Type = body.Type
+
+	user, ok := currentUser(r)
+	if !ok {
+		unauthorizedResponse(w, errors.New("unauthorized"))
+		return
+	}
+
+	if !app.requireConversationMember(w, r, body.ConversationID) {
+		return
+	}
+
+	payload := store.CreateMessageParams{
+		Content:  body.Content,
+		ID:       body.ConversationID,
+		SenderID: user.ID,
+		Type:     body.Type,
+	}
 
 	_, err = app.query.CreateMessage(ctx, payload)
 	if err != nil {
@@ -49,21 +62,9 @@ func (app *application) getMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// claims, ok := clerk.SessionClaimsFromContext(ctx)
-	// if !ok {
-	// 	w.WriteHeader(http.StatusUnauthorized)
-	// 	w.Write([]byte(`{"access": "unauthorized"}`))
-	// 	return
-	// }
-	// usr, err := user.Get(ctx, claims.Subject)
-	// if err != nil {
-	// 	badRequestResponse(w, err)
-	// 	return
-	// }
-	// if usr == nil {
-	// 	badRequestResponse(w, fmt.Errorf("User does not exist: %v", err))
-	// 	return
-	// }
+	if !app.requireConversationMember(w, r, int64(id)) {
+		return
+	}
 
 	messages, err := app.query.GetMessages(ctx, int64(id))
 	if err != nil {
@@ -80,6 +81,13 @@ func (app *application) getMessages(w http.ResponseWriter, r *http.Request) {
 
 func (app *application) markReadMessage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+
+	user, ok := currentUser(r)
+	if !ok {
+		unauthorizedResponse(w, errors.New("unauthorized"))
+		return
+	}
+
 	var payload store.MarkReadMessageParams
 
 	err := readJSON(w, r, &payload)
@@ -87,6 +95,11 @@ func (app *application) markReadMessage(w http.ResponseWriter, r *http.Request) 
 		badRequestResponse(w, err)
 		return
 	}
+
+	if !app.requireConversationMember(w, r, payload.ConversationID) {
+		return
+	}
+	payload.MemberID = user.ID
 
 	err = app.query.MarkReadMessage(ctx, payload)
 	if err != nil {
@@ -110,6 +123,20 @@ func (app *application) getConversationLastMessage(w http.ResponseWriter, r *htt
 		return
 	}
 
+	conversationID, err := app.query.GetMessageConversationId(ctx, int64(message_id))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			notFoundResponse(w, err)
+			return
+		}
+		serverErrorResponse(w, err)
+		return
+	}
+
+	if !app.requireConversationMember(w, r, conversationID) {
+		return
+	}
+
 	message, err := app.query.GetConversationLastMessage(ctx, int64(message_id))
 	if err != nil {
 		badRequestResponse(w, err)
@@ -125,9 +152,14 @@ func (app *application) getConversationLastMessage(w http.ResponseWriter, r *htt
 
 func (app *application) getAllUnseenMessageCount(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	clerk_id := r.PathValue("clerk_id")
 
-	data, err := app.query.GetAllUnseenMessageCount(ctx, clerk_id)
+	user, ok := currentUser(r)
+	if !ok {
+		unauthorizedResponse(w, errors.New("unauthorized"))
+		return
+	}
+
+	data, err := app.query.GetAllUnseenMessageCount(ctx, user.ClerkID)
 	if err != nil {
 		badRequestResponse(w, err)
 		return

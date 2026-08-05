@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { baseUrl } from "./utils";
+import { authHeaders, baseUrl } from "./utils";
 
 type getConversationParams = {
-  clerk_id: string;
   conversation_id: number;
+  token: string;
 };
 const conversationSchema = z.array(
   z.object({
@@ -21,10 +21,13 @@ const conversationSchema = z.array(
   })
 );
 export async function getConversation({
-  clerk_id,
   conversation_id,
+  token,
 }: getConversationParams): Promise<z.infer<typeof conversationSchema>> {
-  const response = await fetch(`${baseUrl}/conversation/${clerk_id}/${conversation_id}`, { method: "GET" });
+  const response = await fetch(`${baseUrl}/conversation/${conversation_id}`, {
+    method: "GET",
+    headers: authHeaders(token),
+  });
   if (!response.ok) {
     throw new Error(`HTTP error: ${response.status}`);
   }
@@ -37,13 +40,16 @@ export async function getConversation({
 }
 
 type getAllConversationsParams = {
-  clerk_id: string;
+  token: string;
 };
 const allConversationsSchema = z.array(conversationSchema);
 export async function getAllConversations({
-  clerk_id,
+  token,
 }: getAllConversationsParams): Promise<z.infer<typeof allConversationsSchema>> {
-  const response = await fetch(`${baseUrl}/conversations/${clerk_id}`, { method: "GET" });
+  const response = await fetch(`${baseUrl}/conversations`, {
+    method: "GET",
+    headers: authHeaders(token),
+  });
   if (!response.ok) {
     throw new Error(`HTTP error: ${response.status}`);
   }
@@ -63,11 +69,15 @@ export async function getAllConversations({
 type createGroupParams = {
   member_id_arr: number[];
   name: string;
-  clerk_id: string;
+  token: string;
 };
-export async function createGroup({ member_id_arr, name, clerk_id }: createGroupParams) {
-  const response = await fetch(`${baseUrl}/group/create/${clerk_id}`, {
+export async function createGroup({ member_id_arr, name, token }: createGroupParams) {
+  const response = await fetch(`${baseUrl}/group/create`, {
     method: "POST",
+    headers: {
+      ...authHeaders(token),
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({
       member_id_arr,
       name,
@@ -79,12 +89,13 @@ export async function createGroup({ member_id_arr, name, clerk_id }: createGroup
 }
 
 type leaveGroupParams = {
-  clerk_id: string;
   conversation_id: number;
+  token: string;
 };
-export async function leaveGroup({ clerk_id, conversation_id }: leaveGroupParams) {
-  const response = await fetch(`${baseUrl}/group/leave/${clerk_id}/${conversation_id}`, {
+export async function leaveGroup({ conversation_id, token }: leaveGroupParams) {
+  const response = await fetch(`${baseUrl}/group/leave/${conversation_id}`, {
     method: "DELETE",
+    headers: authHeaders(token),
   });
   if (!response.ok) {
     throw new Error(`HTTP error: ${response.status}`);
@@ -92,12 +103,13 @@ export async function leaveGroup({ clerk_id, conversation_id }: leaveGroupParams
 }
 
 type deleteGroupParams = {
-  clerk_id: string;
   conversation_id: number;
+  token: string;
 };
-export async function deleteGroup({ clerk_id, conversation_id }: deleteGroupParams) {
-  const response = await fetch(`${baseUrl}/group/delete/${clerk_id}/${conversation_id}`, {
+export async function deleteGroup({ conversation_id, token }: deleteGroupParams) {
+  const response = await fetch(`${baseUrl}/group/delete/${conversation_id}`, {
     method: "DELETE",
+    headers: authHeaders(token),
   });
   if (!response.ok) {
     throw new Error(`HTTP error: ${response.status}`);

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
@@ -16,7 +17,7 @@ import (
 type Client struct {
 	conn           *websocket.Conn
 	send           chan []byte
-	userID         string
+	userID         int64
 	conversationID int64
 }
 
@@ -41,7 +42,7 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		return true // Implement proper origin checking in production
+		return true // Origin is validated in handleWebSocket before upgrading
 	},
 }
 
@@ -67,7 +68,7 @@ func (h *Hub) run() {
 			h.conversations[client.conversationID][client] = true
 
 			// Log connection for debugging
-			log.Printf("User %s joined conversation %d. Total participants: %d",
+			log.Printf("User %d joined conversation %d. Total participants: %d",
 				client.userID,
 				client.conversationID,
 				len(h.conversations[client.conversationID]))
@@ -86,7 +87,7 @@ func (h *Hub) run() {
 						delete(h.conversations, client.conversationID)
 					}
 
-					log.Printf("User %s left conversation %d. Remaining participants: %d",
+					log.Printf("User %d left conversation %d. Remaining participants: %d",
 						client.userID,
 						client.conversationID,
 						len(clients))
@@ -141,25 +142,13 @@ func (c *Client) readPump(hub *Hub, app *application) {
 
 		// Validate that the message is for the correct conversation
 		if msg.ConversationID != c.conversationID {
-			log.Printf("Warning: User %s tried to send message to conversation %d while in conversation %d",
+			log.Printf("Warning: User %d tried to send message to conversation %d while in conversation %d",
 				c.userID, msg.ConversationID, c.conversationID)
 			continue
 		}
 
-		// content: "hi"
-		// conversation_id: 30
-		// created_at: "2025-02-16T22:00:46+08:00"
-		// email: "jier@e.com"
-		// image_url: "https://cdn.pixabay.com/photo/2021/11/12/03/04/woman-6787784_1280.png"
-		// message_id: 46
-		// type: "text"
-		// user_id: 1
-		// username: "JJJJ"
-
-		// content: "hi"
-		// conversation_id: 30
-		// sender_id: 15
-		// type: "text"
+		// The sender is the authenticated client, never a client-supplied value.
+		msg.SenderID = c.userID
 
 		// Store message in database
 		payload := store.CreateMessageParams{
@@ -217,18 +206,21 @@ func (app *application) handleWebSocket(hub *Hub, w http.ResponseWriter, r *http
 		return
 	}
 
-	clerkUser, err := getClerkUser(r.Context())
-	if err != nil {
-		badRequestResponse(w, err)
+	// Validate the Origin header before upgrading (the shared upgrader's
+	// CheckOrigin cannot hold per-app state without a race).
+	if origin := r.Header.Get("Origin"); origin != "" && !app.isTrustedOrigin(origin) {
+		http.Error(w, "Forbidden origin", http.StatusForbidden)
 		return
 	}
 
-	// userID := getUserIDFromRequest(r) // Implement this based on your auth system
-	userID := clerkUser.ID
+	// The current user was resolved by requireUser.
+	if !app.requireConversationMember(w, r, conversationID) {
+		return
+	}
 
-	// Validate that the user has access to this conversation
-	if !app.hasAccessToConversation(userID, conversationID) {
-		http.Error(w, "Unauthorized access to conversation", http.StatusForbidden)
+	user, ok := currentUser(r)
+	if !ok {
+		unauthorizedResponse(w, errors.New("unauthorized"))
 		return
 	}
 
@@ -241,7 +233,7 @@ func (app *application) handleWebSocket(hub *Hub, w http.ResponseWriter, r *http
 	client := &Client{
 		conn:           conn,
 		send:           make(chan []byte, 256),
-		userID:         userID,
+		userID:         user.ID,
 		conversationID: conversationID,
 	}
 
@@ -250,11 +242,4 @@ func (app *application) handleWebSocket(hub *Hub, w http.ResponseWriter, r *http
 	// Start goroutines for pumping messages
 	go client.writePump()
 	go client.readPump(hub, app)
-}
-
-// Helper function to check if a user has access to a conversation
-func (app *application) hasAccessToConversation(userID string, conversationID int64) bool {
-	// Implement your access control logic here
-	// Example: Check if the user is a member of the conversation in your database
-	return true
 }

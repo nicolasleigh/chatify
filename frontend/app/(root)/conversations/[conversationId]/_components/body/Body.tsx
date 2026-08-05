@@ -3,6 +3,7 @@
 import { markReadMessage } from "@/api/messages";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import useConversation from "@/hooks/useConversation";
+import { useAuth } from "@clerk/nextjs";
 import { useMutation } from "@tanstack/react-query";
 import { Dispatch, SetStateAction, useEffect } from "react";
 import CallRoom from "./CallRoom";
@@ -32,16 +33,21 @@ type Props = {
 export default function Body({ members, callType, setCallType, currentUserId, msg: messages }: Props) {
   const { conversationId: id } = useConversation();
   const conversationId = parseInt(id);
+  const { getToken } = useAuth();
 
   const { mutate: markRead } = useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       conversation_id,
       last_seen_message_id,
     }: {
       conversation_id: number;
       last_seen_message_id: number;
     }) => {
-      return markReadMessage({ conversation_id, last_seen_message_id, member_id: currentUserId });
+      const token = await getToken();
+      if (!token) {
+        throw new Error("User token not found");
+      }
+      return markReadMessage({ conversation_id, last_seen_message_id, token });
     },
   });
 

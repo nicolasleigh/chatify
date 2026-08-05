@@ -3,14 +3,15 @@ import { useAuth } from "@clerk/nextjs";
 import { useQuery } from "@tanstack/react-query";
 
 export default function useGetUnseenCount() {
-  const { userId: clerk_id } = useAuth();
+  const { getToken } = useAuth();
   const { data } = useQuery({
     queryKey: ["unseen_message_count"],
-    queryFn: () => {
-      if (!clerk_id) {
-        throw new Error("User id not found");
+    queryFn: async () => {
+      const token = await getToken();
+      if (!token) {
+        throw new Error("User token not found");
       }
-      return getUnseenMessageCount({ clerk_id });
+      return getUnseenMessageCount({ token });
     },
     refetchInterval: 1000,
   });

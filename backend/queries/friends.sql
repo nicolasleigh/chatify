@@ -13,9 +13,12 @@ SELECT
     (SELECT id FROM users WHERE users.email = $2)
 FROM clerk_users;
 
+-- name: GetRequest :one
+SELECT * FROM friend_requests WHERE id = $1;
+
 -- name: DeleteRequest :one
-DELETE FROM friend_requests 
-WHERE sender_id = $1
+DELETE FROM friend_requests
+WHERE id = $1
 RETURNING *;
 
 -- name: AcceptRequest :exec

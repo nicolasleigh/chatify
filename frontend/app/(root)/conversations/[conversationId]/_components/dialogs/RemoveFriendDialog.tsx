@@ -9,6 +9,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useAuth } from "@clerk/nextjs";
 import { useMutation } from "@tanstack/react-query";
 import { Dispatch, SetStateAction } from "react";
 import { toast } from "sonner";
@@ -20,9 +21,14 @@ type Props = {
 };
 
 export default function RemoveFriendDialog({ conversationId, open, setOpen }: Props) {
+  const { getToken } = useAuth();
   const { mutate: removeFriend, isPending } = useMutation({
-    mutationFn: () => {
-      return deleteFriend({ conversation_id: conversationId });
+    mutationFn: async () => {
+      const token = await getToken();
+      if (!token) {
+        throw new Error("User token not found");
+      }
+      return deleteFriend({ conversation_id: conversationId, token });
     },
     onSuccess: () => {
       toast.success("Friend delete successfully");

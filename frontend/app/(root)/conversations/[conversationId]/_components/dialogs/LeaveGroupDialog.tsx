@@ -21,13 +21,14 @@ type Props = {
 };
 
 export default function LeaveGroupDialog({ conversationId, open, setOpen }: Props) {
-  const { userId: clerk_id } = useAuth();
+  const { getToken } = useAuth();
   const { mutate: leave, isPending } = useMutation({
-    mutationFn: () => {
-      if (!clerk_id) {
-        throw new Error("User not found");
+    mutationFn: async () => {
+      const token = await getToken();
+      if (!token) {
+        throw new Error("User token not found");
       }
-      return leaveGroup({ clerk_id, conversation_id: conversationId });
+      return leaveGroup({ conversation_id: conversationId, token });
     },
     onSuccess: () => {
       toast.success("Group left");

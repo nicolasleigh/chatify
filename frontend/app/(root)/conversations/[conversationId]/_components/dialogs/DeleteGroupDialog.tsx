@@ -9,6 +9,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useAuth } from "@clerk/nextjs";
 import { useMutation } from "@tanstack/react-query";
 import { Dispatch, SetStateAction } from "react";
 import { toast } from "sonner";
@@ -17,13 +18,17 @@ type Props = {
   conversationId: number;
   open: boolean;
   setOpen: Dispatch<SetStateAction<boolean>>;
-  clerkId: string;
 };
 
-export default function DeleteGroupDialog({ conversationId, open, setOpen, clerkId }: Props) {
+export default function DeleteGroupDialog({ conversationId, open, setOpen }: Props) {
+  const { getToken } = useAuth();
   const { mutate: deleteGp, isPending } = useMutation({
-    mutationFn: () => {
-      return deleteGroup({ clerk_id: clerkId, conversation_id: conversationId });
+    mutationFn: async () => {
+      const token = await getToken();
+      if (!token) {
+        throw new Error("User token not found");
+      }
+      return deleteGroup({ conversation_id: conversationId, token });
     },
     onSuccess: () => {
       toast.success("Group Deleted");

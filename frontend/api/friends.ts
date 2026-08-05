@@ -1,17 +1,18 @@
 import { z } from "zod";
-import { baseUrl } from "./utils";
+import { authHeaders, baseUrl } from "./utils";
 
 type createRequestParams = {
-  clerkId: string;
   email: string;
+  token: string;
 };
-export async function createRequest({ clerkId, email }: createRequestParams) {
+export async function createRequest({ email, token }: createRequestParams) {
   const response = await fetch(`${baseUrl}/request`, {
     method: "POST",
     headers: {
+      ...authHeaders(token),
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ clerk_id: clerkId, email }),
+    body: JSON.stringify({ email }),
   });
   const data = await response.json();
   if (!response.ok) {
@@ -24,11 +25,13 @@ export async function createRequest({ clerkId, email }: createRequestParams) {
 
 type denyRequestParams = {
   request_id: number;
+  token: string;
 };
-export async function denyRequest({ request_id }: denyRequestParams) {
+export async function denyRequest({ request_id, token }: denyRequestParams) {
   // When using react-query, be careful in wrapping in try-catch block, if you doing so, onError may not be triggered
   const response = await fetch(`${baseUrl}/deny/${request_id}`, {
     method: "DELETE",
+    headers: authHeaders(token),
   });
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);
@@ -39,17 +42,16 @@ export async function denyRequest({ request_id }: denyRequestParams) {
 
 type acceptRequestParams = {
   request_id: number;
-  column_1: number;
-  column_2: number;
+  token: string;
 };
-export async function acceptRequest({ request_id, column_1, column_2 }: acceptRequestParams) {
-  await fetch(`${baseUrl}/request/accept/${request_id}`, {
+export async function acceptRequest({ request_id, token }: acceptRequestParams) {
+  const response = await fetch(`${baseUrl}/request/accept/${request_id}`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ column_1, column_2 }),
+    headers: authHeaders(token),
   });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
 }
 
 const getFriendsSchema = z.array(
@@ -62,11 +64,12 @@ const getFriendsSchema = z.array(
   })
 );
 type getFriendsParams = {
-  clerk_id: string;
+  token: string;
 };
-export async function getFriends({ clerk_id }: getFriendsParams): Promise<z.infer<typeof getFriendsSchema>> {
-  const response = await fetch(`${baseUrl}/friends/${clerk_id}`, {
+export async function getFriends({ token }: getFriendsParams): Promise<z.infer<typeof getFriendsSchema>> {
+  const response = await fetch(`${baseUrl}/friends`, {
     method: "GET",
+    headers: authHeaders(token),
   });
   if (!response.ok) {
     throw new Error(`HTTP error: ${response.status}`);
@@ -78,15 +81,20 @@ export async function getFriends({ clerk_id }: getFriendsParams): Promise<z.infe
 
 type deleteFriendParams = {
   conversation_id: number;
+  token: string;
 };
-export async function deleteFriend({ conversation_id }: deleteFriendParams) {
-  await fetch(`${baseUrl}/friend/${conversation_id}`, {
+export async function deleteFriend({ conversation_id, token }: deleteFriendParams) {
+  const response = await fetch(`${baseUrl}/friend/${conversation_id}`, {
     method: "DELETE",
+    headers: authHeaders(token),
   });
+  if (!response.ok) {
+    throw new Error(`HTTP error: ${response.status}`);
+  }
 }
 
 type getRequestsParams = {
-  clerk_id: string;
+  token: string;
 };
 const requestsSchema = z.array(
   z.object({
@@ -99,9 +107,10 @@ const requestsSchema = z.array(
     receiver_id: z.number(),
   })
 );
-export async function getRequests({ clerk_id }: getRequestsParams): Promise<z.infer<typeof requestsSchema>> {
-  const response = await fetch(`${baseUrl}/requests/${clerk_id}`, {
+export async function getRequests({ token }: getRequestsParams): Promise<z.infer<typeof requestsSchema>> {
+  const response = await fetch(`${baseUrl}/requests`, {
     method: "GET",
+    headers: authHeaders(token),
   });
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);

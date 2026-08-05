@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { baseUrl } from "./utils";
+import { authHeaders, baseUrl } from "./utils";
 
 const getMessagesSchema = z.array(
   z.object({
@@ -31,43 +31,20 @@ export async function getMessages(conversation_id: number, token: string): Promi
   return data;
 }
 
-type createMessageParams = {
-  sender_id: number;
-  conversation_id: number;
-  type: string;
-  content: string;
-};
-export async function createMessage({ sender_id, conversation_id, content, type }: createMessageParams) {
-  const response = await fetch(`${baseUrl}/message`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      sender_id,
-      conversation_id,
-      content,
-      type,
-    }),
-  });
-  if (!response.ok) {
-    throw new Error(`HTTP error: ${response.status}`);
-  }
-  const data = await response.json();
-  return data;
-}
-
 type markReadMessageParams = {
   last_seen_message_id: number;
   conversation_id: number;
-  member_id: number;
+  token: string;
 };
-export async function markReadMessage({ conversation_id, member_id, last_seen_message_id }: markReadMessageParams) {
+export async function markReadMessage({ conversation_id, last_seen_message_id, token }: markReadMessageParams) {
   const response = await fetch(`${baseUrl}/message/mark_read`, {
     method: "POST",
+    headers: {
+      ...authHeaders(token),
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({
       conversation_id,
-      member_id,
       last_seen_message_id,
     }),
   });
@@ -87,12 +64,15 @@ const getConversationLastMessageSchema = z.object({
 
 type getConversationLastMessageParams = {
   message_id: number;
+  token: string;
 };
 export async function getConversationLastMessage({
   message_id,
+  token,
 }: getConversationLastMessageParams): Promise<z.infer<typeof getConversationLastMessageSchema>> {
   const response = await fetch(`${baseUrl}/message/${message_id}`, {
     method: "GET",
+    headers: authHeaders(token),
   });
   if (!response.ok) {
     throw new Error(`HTTP error: ${response.status}`);
@@ -114,13 +94,14 @@ const getUnseenMessageCountSchema = z.array(
   })
 );
 type getUnseenMessageCountParams = {
-  clerk_id: string;
+  token: string;
 };
 export async function getUnseenMessageCount({
-  clerk_id,
+  token,
 }: getUnseenMessageCountParams): Promise<z.infer<typeof getUnseenMessageCountSchema>> {
-  const response = await fetch(`${baseUrl}/message/unseen/${clerk_id}`, {
+  const response = await fetch(`${baseUrl}/message/unseen`, {
     method: "GET",
+    headers: authHeaders(token),
   });
   if (!response.ok) {
     throw new Error(`HTTP error: ${response.status}`);

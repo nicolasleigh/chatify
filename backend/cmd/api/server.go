@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/clerk/clerk-sdk-go/v2"
 	clerkhttp "github.com/clerk/clerk-sdk-go/v2/http"
@@ -16,8 +17,12 @@ func (app *application) NewServer() *http.Server {
 	clerk.SetKey(os.Getenv("CLERK_KEY"))
 
 	jwtExtractor := clerkhttp.AuthorizationJWTExtractor(func(r *http.Request) string {
-		jwt := r.Header.Get("Sec-WebSocket-Protocol")
-		return jwt
+		// WebSocket connections send the JWT as the Sec-WebSocket-Protocol value.
+		if ws := r.Header.Get("Sec-WebSocket-Protocol"); ws != "" {
+			return ws
+		}
+		// Standard requests use Authorization: Bearer <token>.
+		return strings.TrimPrefix(strings.TrimSpace(r.Header.Get("Authorization")), "Bearer ")
 	})
 	// wrap middlewares
 	wrappedMux := app.enableCORS(clerkhttp.WithHeaderAuthorization(jwtExtractor)(mux))

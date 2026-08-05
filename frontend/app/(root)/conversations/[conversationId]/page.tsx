@@ -4,9 +4,9 @@ import { getConversation } from "@/api/conversations";
 import ConversationContainer from "@/components/shared/conversation/ConversationContainer";
 import { useAuthInfo } from "@/hooks/useAuthInfo";
 import { useMessagesQuery } from "@/hooks/useMessagesQuery";
+import { useAuth } from "@clerk/nextjs";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import { useSearchParams } from "next/navigation";
 import React, { useEffect, useState } from "react";
 import Header from "./_components/Header";
 import Body from "./_components/body/Body";
@@ -21,16 +21,16 @@ type Props = {
 
 export default function ConversationPage({ params }: Props) {
   const { conversationId } = React.use(params);
-  const searchParams = useSearchParams();
   const { token } = useAuthInfo();
-  const clerk_id = searchParams.get("clerk_id");
+  const { getToken } = useAuth();
   const { data: conversation } = useQuery({
     queryKey: ["conversation", conversationId],
-    queryFn: () => {
-      if (!clerk_id) {
-        throw new Error("Clerk user not found");
+    queryFn: async () => {
+      const token = await getToken();
+      if (!token) {
+        throw new Error("User token not found");
       }
-      return getConversation({ conversation_id: conversationId, clerk_id });
+      return getConversation({ conversation_id: conversationId, token });
     },
   });
 
@@ -100,7 +100,6 @@ export default function ConversationPage({ params }: Props) {
         conversationId={conversationId}
         open={deleteGroupDialogOpen}
         setOpen={setDeleteGroupDialogOpen}
-        clerkId={clerk_id}
       />
       <LeaveGroupDialog conversationId={conversationId} open={leaveGroupDialogOpen} setOpen={setLeaveGroupDialogOpen} />
       <Header

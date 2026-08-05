@@ -1,13 +1,8 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
-
-	"github.com/clerk/clerk-sdk-go/v2"
-	"github.com/clerk/clerk-sdk-go/v2/user"
 )
 
 func writeJSON(w http.ResponseWriter, status int, data any) error {
@@ -25,20 +20,4 @@ func readJSON(w http.ResponseWriter, r *http.Request, ptr any) error {
 	dec := json.NewDecoder(body)
 	dec.DisallowUnknownFields()
 	return dec.Decode(ptr)
-}
-
-func getClerkUser(ctx context.Context) (*clerk.User, error) {
-	claims, ok := clerk.SessionClaimsFromContext(ctx)
-	if !ok {
-		return nil, errors.New("unauthorized")
-	}
-	usr, err := user.Get(ctx, claims.Subject)
-	if err != nil {
-		return nil, err
-	}
-	if usr == nil {
-		return nil, errors.New("User does not exist")
-	}
-
-	return usr, nil
 }

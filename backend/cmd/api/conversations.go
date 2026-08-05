@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -10,15 +11,24 @@ import (
 func (app *application) getConversation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	idString := r.PathValue("conversation_id")
-	clerkIdString := r.PathValue("clerk_id")
 	conversation_id, err := strconv.Atoi(idString)
 	if err != nil {
 		badRequestResponse(w, err)
 		return
 	}
 
+	user, ok := currentUser(r)
+	if !ok {
+		unauthorizedResponse(w, errors.New("unauthorized"))
+		return
+	}
+
+	if !app.requireConversationMember(w, r, int64(conversation_id)) {
+		return
+	}
+
 	payload := store.GetConversationParams{
-		ClerkID:        clerkIdString,
+		ClerkID:        user.ClerkID,
 		ConversationID: int64(conversation_id),
 	}
 
@@ -37,10 +47,15 @@ func (app *application) getConversation(w http.ResponseWriter, r *http.Request) 
 
 func (app *application) getAllConversations(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	clerk_id := r.PathValue("clerk_id")
 	var conversations [][]store.GetConversationRow
 
-	conversationIds, err := app.query.GetConversationsByClerkId(ctx, clerk_id)
+	user, ok := currentUser(r)
+	if !ok {
+		unauthorizedResponse(w, errors.New("unauthorized"))
+		return
+	}
+
+	conversationIds, err := app.query.GetConversationsByClerkId(ctx, user.ClerkID)
 	if err != nil {
 		badRequestResponse(w, err)
 		return
@@ -48,7 +63,7 @@ func (app *application) getAllConversations(w http.ResponseWriter, r *http.Reque
 
 	for _, conversation_id := range conversationIds {
 		payload := store.GetConversationParams{
-			ClerkID:        clerk_id,
+			ClerkID:        user.ClerkID,
 			ConversationID: int64(conversation_id),
 		}
 		data, err := app.query.GetConversation(ctx, payload)
@@ -69,7 +84,6 @@ func (app *application) getAllConversations(w http.ResponseWriter, r *http.Reque
 
 func (app *application) createGroup(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	idString := r.PathValue("clerk_id")
 
 	var body struct {
 		Name          string  `json:"name"`
@@ -84,9 +98,15 @@ func (app *application) createGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	user, ok := currentUser(r)
+	if !ok {
+		unauthorizedResponse(w, errors.New("unauthorized"))
+		return
+	}
+
 	payload.Name = &body.Name
 	payload.Column3 = body.Member_id_arr
-	payload.ClerkID = idString
+	payload.ClerkID = user.ClerkID
 
 	err = app.query.CreateGroup(ctx, payload)
 	if err != nil {
@@ -104,14 +124,20 @@ func (app *application) createGroup(w http.ResponseWriter, r *http.Request) {
 func (app *application) leaveGroup(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	idString := r.PathValue("conversation_id")
-	clerk_id := r.PathValue("clerk_id")
 	conversation_id, err := strconv.Atoi(idString)
 	if err != nil {
 		badRequestResponse(w, err)
 		return
 	}
+
+	user, ok := currentUser(r)
+	if !ok {
+		unauthorizedResponse(w, errors.New("unauthorized"))
+		return
+	}
+
 	payload := store.LeaveGroupParams{
-		ClerkID:        clerk_id,
+		ClerkID:        user.ClerkID,
 		ConversationID: int64(conversation_id),
 	}
 	err = app.query.LeaveGroup(ctx, payload)
@@ -121,19 +147,29 @@ func (app *application) leaveGroup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err = writeJSON(w, http.StatusOK, "success")
+	if err != nil {
+		badRequestResponse(w, err)
+		return
+	}
 }
 
 func (app *application) deleteGroup(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	idString := r.PathValue("conversation_id")
-	clerk_id := r.PathValue("clerk_id")
 	conversation_id, err := strconv.Atoi(idString)
 	if err != nil {
 		badRequestResponse(w, err)
 		return
 	}
+
+	user, ok := currentUser(r)
+	if !ok {
+		unauthorizedResponse(w, errors.New("unauthorized"))
+		return
+	}
+
 	payload := store.DeleteGroupParams{
-		ClerkID: clerk_id,
+		ClerkID: user.ClerkID,
 		ID:      int64(conversation_id),
 	}
 	err = app.query.DeleteGroup(ctx, payload)
@@ -142,4 +178,8 @@ func (app *application) deleteGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err = writeJSON(w, http.StatusOK, "success")
+	if err != nil {
+		badRequestResponse(w, err)
+		return
+	}
 }

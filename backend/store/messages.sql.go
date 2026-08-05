@@ -161,6 +161,17 @@ func (q *Queries) GetMessageById(ctx context.Context, id int64) (GetMessageByIdR
 	return i, err
 }
 
+const getMessageConversationId = `-- name: GetMessageConversationId :one
+SELECT conversation_id FROM messages WHERE id = $1
+`
+
+func (q *Queries) GetMessageConversationId(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRow(ctx, getMessageConversationId, id)
+	var conversation_id int64
+	err := row.Scan(&conversation_id)
+	return conversation_id, err
+}
+
 const getMessages = `-- name: GetMessages :many
 SELECT u.id as user_id, u.username, u.image_url, u.email, m.id as message_id, m.conversation_id as conversation_id, m.type, m.content, m.created_at FROM messages m
 JOIN users u ON u.id = m.sender_id

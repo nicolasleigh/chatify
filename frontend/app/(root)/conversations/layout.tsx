@@ -11,20 +11,16 @@ import DMConversationItem from "./_components/DMConversationItem";
 import GroupConversationItem from "./_components/GroupConversationItem";
 
 export default function ConversationsLayout({ children }: { children: ReactNode }) {
-  const { userId: clerk_id } = useAuth();
-  // const getAuthToken = async () => {
-  //   const token = await getToken();
-  //   console.log("token", token);
-  // };
-  // getAuthToken();
+  const { getToken } = useAuth();
 
   const { data: conversations } = useQuery({
     queryKey: ["conversations"],
-    queryFn: () => {
-      if (!clerk_id) {
-        throw new Error("User ID not found");
+    queryFn: async () => {
+      const token = await getToken();
+      if (!token) {
+        throw new Error("User token not found");
       }
-      return getAllConversations({ clerk_id });
+      return getAllConversations({ token });
     },
   });
   return (
@@ -41,7 +37,6 @@ export default function ConversationsLayout({ children }: { children: ReactNode 
                   id={conv[0].conversation_id}
                   name={conv[0].conversation_name}
                   lastMessageId={conv[0].last_message_id}
-                  clerkId={clerk_id || ""}
                   // unseenCount={conv[0].unseen_message_count || 0}
                 />
               ) : (
@@ -50,7 +45,6 @@ export default function ConversationsLayout({ children }: { children: ReactNode 
                   id={conv[0].conversation_id}
                   username={conv[0].other_member_username || ""}
                   imageUrl={conv[0].other_member_image_url || ""}
-                  clerkId={clerk_id || ""}
                   // unseenCount={conv[0].unseen_message_count || 0}
                   lastMessageId={conv[0].last_message_id}
                 />
