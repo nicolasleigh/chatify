@@ -1,14 +1,10 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
-
-	"github.com/clerk/clerk-sdk-go/v2"
-	"github.com/clerk/clerk-sdk-go/v2/user"
 )
 
 const maxJSONBodyBytes = 1_048_576
@@ -38,20 +34,4 @@ func readJSON(w http.ResponseWriter, r *http.Request, ptr any) error {
 	}
 
 	return nil
-}
-
-func getClerkUser(ctx context.Context) (*clerk.User, error) {
-	claims, ok := clerk.SessionClaimsFromContext(ctx)
-	if !ok {
-		return nil, errors.New("unauthorized")
-	}
-	usr, err := user.Get(ctx, claims.Subject)
-	if err != nil {
-		return nil, err
-	}
-	if usr == nil {
-		return nil, errors.New("User does not exist")
-	}
-
-	return usr, nil
 }

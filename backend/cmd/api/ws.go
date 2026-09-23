@@ -254,14 +254,12 @@ func (app *application) handleWebSocket(hub *Hub, w http.ResponseWriter, r *http
 		return
 	}
 
-	clerkUser, err := getClerkUser(r.Context())
+	userID, err := authenticatedClerkID(r.Context())
 	if err != nil {
-		badRequestResponse(w, err)
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	// userID := getUserIDFromRequest(r) // Implement this based on your auth system
-	userID := clerkUser.ID
 	localUser, err := app.query.GetUser(r.Context(), userID)
 	if err != nil {
 		serverErrorResponse(w, err)
