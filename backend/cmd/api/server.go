@@ -24,7 +24,7 @@ func (app *application) NewServer() *http.Server {
 		return strings.TrimSpace(r.Header.Get("Sec-WebSocket-Protocol"))
 	})
 	// wrap middlewares
-	wrappedMux := app.enableCORS(clerkhttp.WithHeaderAuthorization(jwtExtractor)(mux))
+	wrappedMux := withRequestID(app.enableCORS(clerkhttp.WithHeaderAuthorization(jwtExtractor)(mux)))
 	// wrappedMux := app.enableCORS(mux)
 
 	srv := &http.Server{
