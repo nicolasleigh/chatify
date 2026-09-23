@@ -94,6 +94,38 @@ confirmation. Temporary failures are retried with exponential backoff; events
 that exceed the retry limit remain in the database with status `failed` for
 inspection and replay.
 
+### Offline browser notifications
+
+Offline notifications are opt-in and use the Web Push protocol. The browser
+asks the signed-in user for permission, registers `public/push-sw.js`, and
+saves the resulting endpoint through the authenticated subscription API. The
+backend never accepts a user ID from this request; it derives ownership from
+the Clerk session.
+
+To enable delivery in a deployment:
+
+1. Generate one VAPID key pair for the deployment. Keep the private key only
+   in the backend secret store; the public key may be exposed to the browser.
+2. Apply all database migrations, including the `push_subscriptions` and
+   `notification_deliveries` tables.
+3. Set `NOTIFICATION_ENABLED=true`, `WEB_PUSH_VAPID_PUBLIC_KEY`,
+   `WEB_PUSH_VAPID_PRIVATE_KEY`, and `WEB_PUSH_VAPID_SUBJECT` in the backend.
+   `WEB_PUSH_VAPID_SUBJECT` is normally a monitored `mailto:` address or an
+   HTTPS contact URL.
+4. Set the same public key as
+   `NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY` before building the frontend image.
+5. Sign in through a secure origin and click **Enable offline notifications**.
+   Browsers generally require HTTPS for Web Push; `localhost` is allowed for
+   local development.
+
+The notification RabbitMQ consumer acknowledges a message only after it has
+created idempotent delivery records. A separate delivery worker encrypts the
+short notification preview, sends it to each browser subscription, retries
+temporary failures with backoff, and disables endpoints rejected permanently
+by the push service. If RabbitMQ is temporarily unavailable, the chat HTTP
+and WebSocket paths continue to start and the consumer reconnects in the
+background; pending Outbox rows remain durable in PostgreSQL.
+
 For Compose deployments, create these local secret files with one value per
 file: `db_user.txt`, `db_password.txt`, `rabbitmq_user.txt`, and
 `rabbitmq_password.txt`. Set `RABBITMQ_URL` in the deployment environment to
