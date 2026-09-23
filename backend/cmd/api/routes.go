@@ -26,7 +26,7 @@ func (app *application) NewRouter() http.Handler {
 	mux.HandleFunc("DELETE /friend/{conversation_id}", app.deleteFriend)
 	mux.Handle("GET /requests/{clerk_id}", requireAuth(http.HandlerFunc(app.getRequests)))
 	// Message
-	mux.HandleFunc("POST /message", app.createMessage)
+	mux.Handle("POST /message", requireAuth(http.HandlerFunc(app.createMessage)))
 	mux.Handle("GET /messages/{conversation_id}", requireAuth(http.HandlerFunc(app.getMessages)))
 	mux.HandleFunc("POST /message/mark_read", app.markReadMessage)
 	mux.Handle("GET /message/{message_id}", requireAuth(http.HandlerFunc(app.getConversationLastMessage)))

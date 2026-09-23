@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -9,6 +10,17 @@ import (
 
 func (app *application) createMessage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	clerkID, err := authenticatedClerkID(ctx)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	localUser, err := app.query.GetUser(ctx, clerkID)
+	if err != nil {
+		serverErrorResponse(w, err)
+		return
+	}
 
 	var payload store.CreateMessageParams
 	var body struct {
@@ -17,15 +29,25 @@ func (app *application) createMessage(w http.ResponseWriter, r *http.Request) {
 		Type           *string `json:"type"`
 		Content        *string `json:"content"`
 	}
-	err := readJSON(w, r, &body)
+	err = readJSON(w, r, &body)
 	if err != nil {
 		badRequestResponse(w, err)
 		return
 	}
 	payload.Content = body.Content
 	payload.ID = body.ConversationID
-	payload.SenderID = body.SenderID
+	payload.SenderID = localUser.ID
 	payload.Type = body.Type
+
+	hasAccess, err := app.hasAccessToConversation(ctx, localUser.ID, body.ConversationID)
+	if err != nil {
+		serverErrorResponse(w, err)
+		return
+	}
+	if !hasAccess {
+		forbiddenResponse(w, errors.New("conversation access denied"))
+		return
+	}
 
 	_, err = app.query.CreateMessage(ctx, payload)
 	if err != nil {
