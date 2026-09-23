@@ -95,10 +95,14 @@ export async function createGroup({ member_id_arr, name, clerk_id }: createGroup
 type leaveGroupParams = {
   clerk_id: string;
   conversation_id: number;
+  token: string;
 };
-export async function leaveGroup({ clerk_id, conversation_id }: leaveGroupParams) {
+export async function leaveGroup({ clerk_id, conversation_id, token }: leaveGroupParams) {
   const response = await fetch(`${baseUrl}/group/leave/${clerk_id}/${conversation_id}`, {
     method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
   });
   if (!response.ok) {
     throw new Error(`HTTP error: ${response.status}`);

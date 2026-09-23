@@ -9,7 +9,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useAuth } from "@clerk/nextjs";
+import { useAuthInfo } from "@/hooks/useAuthInfo";
 import { useMutation } from "@tanstack/react-query";
 import { Dispatch, SetStateAction } from "react";
 import { toast } from "sonner";
@@ -21,13 +21,13 @@ type Props = {
 };
 
 export default function LeaveGroupDialog({ conversationId, open, setOpen }: Props) {
-  const { userId: clerk_id } = useAuth();
+  const { userId: clerk_id, token } = useAuthInfo();
   const { mutate: leave, isPending } = useMutation({
     mutationFn: () => {
-      if (!clerk_id) {
+      if (!clerk_id || !token) {
         throw new Error("User not found");
       }
-      return leaveGroup({ clerk_id, conversation_id: conversationId });
+      return leaveGroup({ clerk_id, conversation_id: conversationId, token });
     },
     onSuccess: () => {
       toast.success("Group left");
