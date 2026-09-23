@@ -117,7 +117,7 @@ func (h *Hub) run() {
 				continue
 			}
 
-			h.mu.RLock()
+			h.mu.Lock()
 			// Send message only to clients in the same conversation
 			if clients, exists := h.conversations[msg.ConversationID]; exists {
 				for client := range clients {
@@ -129,7 +129,7 @@ func (h *Hub) run() {
 					}
 				}
 			}
-			h.mu.RUnlock()
+			h.mu.Unlock()
 		}
 	}
 }
