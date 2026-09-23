@@ -72,6 +72,7 @@ Backend production configuration also supports:
 * `WEB_PUSH_VAPID_PUBLIC_KEY`
 * `WEB_PUSH_VAPID_PRIVATE_KEY`
 * `WEB_PUSH_VAPID_SUBJECT`
+* `NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY`
 * `CORS_TRUSTED_ORIGINS` (comma-separated HTTP origins for browser and WebSocket access)
 * `DB_MAX_CONNS` and `DB_MIN_CONNS`
 * `DB_MAX_CONN_LIFETIME_SECONDS`
