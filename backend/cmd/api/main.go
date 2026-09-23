@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -73,7 +74,10 @@ func main() {
 			healthCheckPeriod: time.Duration(env.GetInt("DB_HEALTH_CHECK_PERIOD_SECONDS", 60)) * time.Second,
 		},
 		cors: cors{
-			trustedOrigins: []string{"http://localhost:3000", "https://chat.linze.pro"},
+			trustedOrigins: parseTrustedOrigins(env.GetString(
+				"CORS_TRUSTED_ORIGINS",
+				"http://localhost:3000,https://chat.linze.pro",
+			)),
 		},
 	}
 
@@ -132,4 +136,15 @@ func main() {
 			slog.Error("http server graceful shutdown failed", "error", err)
 		}
 	}
+}
+
+func parseTrustedOrigins(raw string) []string {
+	parts := strings.Split(raw, ",")
+	origins := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if origin := strings.TrimSpace(part); origin != "" {
+			origins = append(origins, origin)
+		}
+	}
+	return origins
 }
