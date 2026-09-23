@@ -111,16 +111,21 @@ func (app *application) createGroup(w http.ResponseWriter, r *http.Request) {
 
 func (app *application) leaveGroup(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	clerkID, err := authenticatedClerkID(ctx)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	idString := r.PathValue("conversation_id")
-	clerk_id := r.PathValue("clerk_id")
-	conversation_id, err := strconv.Atoi(idString)
+	conversationID, err := strconv.Atoi(idString)
 	if err != nil {
 		badRequestResponse(w, err)
 		return
 	}
 	payload := store.LeaveGroupParams{
-		ClerkID:        clerk_id,
-		ConversationID: int64(conversation_id),
+		ClerkID: clerkID,
+		ID:      int64(conversationID),
 	}
 	err = app.query.LeaveGroup(ctx, payload)
 	if err != nil {

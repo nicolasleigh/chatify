@@ -90,10 +90,15 @@ WITH clerk_users AS (
     SELECT id 
     FROM users 
     WHERE users.clerk_id = $1
+), target_group AS (
+    SELECT id
+    FROM conversations
+    WHERE conversations.id = $2
+      AND conversations.is_group = true
 )
 DELETE FROM conversation_members 
 WHERE conversation_members.member_id IN (SELECT id FROM clerk_users)
-AND conversation_members.conversation_id = $2;
+AND conversation_members.conversation_id IN (SELECT id FROM target_group);
 
 -- name: DeleteGroup :exec
 WITH clerk_users AS (
