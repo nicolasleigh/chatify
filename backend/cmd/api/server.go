@@ -18,7 +18,7 @@ func (app *application) NewServer() *http.Server {
 
 	jwtExtractor := clerkhttp.AuthorizationJWTExtractor(extractClerkJWT)
 	// wrap middlewares
-	wrappedMux := withRequestID(app.enableCORS(clerkhttp.WithHeaderAuthorization(jwtExtractor)(mux)))
+	wrappedMux := withRequestID(withRequestLogging(app.enableCORS(clerkhttp.WithHeaderAuthorization(jwtExtractor)(mux))))
 	// wrappedMux := app.enableCORS(mux)
 
 	srv := &http.Server{
