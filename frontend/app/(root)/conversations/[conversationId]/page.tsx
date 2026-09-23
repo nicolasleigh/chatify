@@ -124,7 +124,6 @@ export default function ConversationPage({ params }: Props) {
         callType={callType}
         setCallType={setCallType}
         currentUserId={conversation[0].current_user_id}
-        websocket={websocket}
         msg={messages}
       />
       <ChatInput sender_id={conversation[0].current_user_id} websocket={websocket} />
