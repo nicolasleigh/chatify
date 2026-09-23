@@ -37,6 +37,7 @@ type Client struct {
 	mu                    sync.Mutex
 	connection            *amqp.Connection
 	channel               *amqp.Channel
+	url                   string
 	eventsExchange        string
 	publishConfirmTimeout time.Duration
 	closed                bool
@@ -57,25 +58,44 @@ func New(cfg Config) (*Client, error) {
 		cfg.PublishConfirmTimeout = defaultConfirmTimeout
 	}
 
-	connection, err := amqp.DialConfig(cfg.URL, amqp.Config{
+	client := &Client{
+		url:                   cfg.URL,
+		eventsExchange:        cfg.EventsExchange,
+		publishConfirmTimeout: cfg.PublishConfirmTimeout,
+	}
+	client.mu.Lock()
+	err := client.connectLocked()
+	client.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	return client, nil
+}
+
+// connectLocked opens and configures a fresh connection/channel pair. The
+// caller must hold c.mu; keeping setup in one function ensures reconnects use
+// exactly the same durable exchange and publisher-confirm configuration as
+// initial startup.
+func (c *Client) connectLocked() error {
+	connection, err := amqp.DialConfig(c.url, amqp.Config{
 		Properties: amqp.NewConnectionProperties(),
 		Locale:     "en_US",
 	})
 	if err != nil {
-		return nil, fmt.Errorf("connect to rabbitmq: %w", err)
+		return fmt.Errorf("connect to rabbitmq: %w", err)
 	}
 
 	channel, err := connection.Channel()
 	if err != nil {
 		_ = connection.Close()
-		return nil, fmt.Errorf("open rabbitmq channel: %w", err)
+		return fmt.Errorf("open rabbitmq channel: %w", err)
 	}
 
 	// A durable topic exchange survives broker restarts. Routing keys are event
 	// types such as message.created, allowing future consumers to subscribe to
 	// one event family or to a wildcard without changing producers.
 	if err := channel.ExchangeDeclare(
-		cfg.EventsExchange,
+		c.eventsExchange,
 		exchangeTypeTopic,
 		true,
 		false,
@@ -85,7 +105,7 @@ func New(cfg Config) (*Client, error) {
 	); err != nil {
 		_ = channel.Close()
 		_ = connection.Close()
-		return nil, fmt.Errorf("declare rabbitmq events exchange: %w", err)
+		return fmt.Errorf("declare rabbitmq events exchange: %w", err)
 	}
 
 	// Deferred confirmations correlate each publish with the broker's ack/nack.
@@ -96,16 +116,25 @@ func New(cfg Config) (*Client, error) {
 	if err := channel.Confirm(false); err != nil {
 		_ = channel.Close()
 		_ = connection.Close()
-		return nil, fmt.Errorf("enable rabbitmq publisher confirms: %w", err)
+		return fmt.Errorf("enable rabbitmq publisher confirms: %w", err)
 	}
 	go drainConfirmations(confirmations)
 
-	return &Client{
-		connection:            connection,
-		channel:               channel,
-		eventsExchange:        cfg.EventsExchange,
-		publishConfirmTimeout: cfg.PublishConfirmTimeout,
-	}, nil
+	c.connection = connection
+	c.channel = channel
+	return nil
+}
+
+func (c *Client) reconnectLocked() error {
+	if c.channel != nil {
+		_ = c.channel.Close()
+	}
+	if c.connection != nil {
+		_ = c.connection.Close()
+	}
+	c.channel = nil
+	c.connection = nil
+	return c.connectLocked()
 }
 
 func drainConfirmations(confirmations <-chan amqp.Confirmation) {
@@ -137,6 +166,11 @@ func (c *Client) Publish(ctx context.Context, envelope messaging.Envelope) error
 	defer c.mu.Unlock()
 	if c.closed {
 		return errors.New("rabbitmq publisher is closed")
+	}
+	if c.channel == nil || c.connection == nil || c.channel.IsClosed() || c.connection.IsClosed() {
+		if err := c.reconnectLocked(); err != nil {
+			return fmt.Errorf("reconnect to rabbitmq: %w", err)
+		}
 	}
 	publishContext := ctx
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline && c.publishConfirmTimeout > 0 {
