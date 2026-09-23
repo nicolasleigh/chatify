@@ -219,9 +219,18 @@ func (q *Queries) GetMessages(ctx context.Context, conversationID int64) ([]GetM
 }
 
 const markReadMessage = `-- name: MarkReadMessage :exec
-UPDATE conversation_members 
+UPDATE conversation_members AS member
 SET last_seen_message_id = $3
-WHERE conversation_id = $1 AND member_id = $2
+WHERE member.conversation_id = $1
+  AND member.member_id = $2
+  AND $3 IS NOT NULL
+  AND $3 > COALESCE(member.last_seen_message_id, 0)
+  AND EXISTS (
+    SELECT 1
+    FROM messages
+    WHERE messages.id = $3
+      AND messages.conversation_id = $1
+  )
 `
 
 type MarkReadMessageParams struct {
