@@ -78,10 +78,15 @@ type createGroupParams = {
   member_id_arr: number[];
   name: string;
   clerk_id: string;
+  token: string;
 };
-export async function createGroup({ member_id_arr, name, clerk_id }: createGroupParams) {
+export async function createGroup({ member_id_arr, name, clerk_id, token }: createGroupParams) {
   const response = await fetch(`${baseUrl}/group/create/${clerk_id}`, {
     method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify({
       member_id_arr,
       name,

@@ -56,7 +56,10 @@ export default function CreateGroupDialog() {
       if (!clerk_id) {
         throw new Error("User ID not valid");
       }
-      return createGroup({ name, member_id_arr, clerk_id });
+      if (!token) {
+        throw new Error("Authentication is not ready");
+      }
+      return createGroup({ name, member_id_arr, clerk_id, token });
     },
     onSuccess: () => {
       form.reset();
