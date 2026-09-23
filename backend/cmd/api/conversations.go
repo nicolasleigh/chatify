@@ -77,7 +77,11 @@ func (app *application) getAllConversations(w http.ResponseWriter, r *http.Reque
 
 func (app *application) createGroup(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	idString := r.PathValue("clerk_id")
+	clerkID, err := authenticatedClerkID(ctx)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	var body struct {
 		Name          string  `json:"name"`
@@ -86,7 +90,7 @@ func (app *application) createGroup(w http.ResponseWriter, r *http.Request) {
 
 	var payload store.CreateGroupParams
 
-	err := readJSON(w, r, &body)
+	err = readJSON(w, r, &body)
 	if err != nil {
 		badRequestResponse(w, err)
 		return
@@ -94,7 +98,7 @@ func (app *application) createGroup(w http.ResponseWriter, r *http.Request) {
 
 	payload.Name = &body.Name
 	payload.Column3 = body.Member_id_arr
-	payload.ClerkID = idString
+	payload.ClerkID = clerkID
 
 	err = app.query.CreateGroup(ctx, payload)
 	if err != nil {

@@ -35,7 +35,7 @@ func (app *application) NewRouter() http.Handler {
 	mux.Handle("GET /conversation/{clerk_id}/{conversation_id}", requireAuth(http.HandlerFunc(app.getConversation)))
 	mux.Handle("GET /conversations/{clerk_id}", requireAuth(http.HandlerFunc(app.getAllConversations)))
 	// Group
-	mux.HandleFunc("POST /group/create/{clerk_id}", app.createGroup)
+	mux.Handle("POST /group/create/{clerk_id}", requireAuth(http.HandlerFunc(app.createGroup)))
 	mux.Handle("DELETE /group/leave/{clerk_id}/{conversation_id}", requireAuth(http.HandlerFunc(app.leaveGroup)))
 	mux.Handle("DELETE /group/delete/{clerk_id}/{conversation_id}", requireAuth(http.HandlerFunc(app.deleteGroup)))
 	// WebSocket

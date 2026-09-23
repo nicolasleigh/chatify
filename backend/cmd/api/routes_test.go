@@ -118,6 +118,18 @@ func TestDeleteGroupRequiresAuthentication(t *testing.T) {
 	}
 }
 
+func TestCreateGroupRequiresAuthentication(t *testing.T) {
+	handler := (&application{}).NewRouter()
+	req := httptest.NewRequest(http.MethodPost, "/group/create/attacker", nil)
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)
+	}
+}
+
 func TestUnseenMessageCountRequiresAuthentication(t *testing.T) {
 	handler := (&application{}).NewRouter()
 	req := httptest.NewRequest(http.MethodGet, "/message/unseen/clerk-user", nil)
