@@ -23,7 +23,7 @@ export default function FriendsPage() {
   });
   return (
     <>
-      <ItemList title='Friends' action={<AddFriendDialog clerkId={clerk_id || ""} />}>
+      <ItemList title='Friends' action={<AddFriendDialog />}>
         {requests ? (
           requests.length === 0 ? (
             <p className='w-full h-full flex items-center justify-center'>No friend requests found</p>

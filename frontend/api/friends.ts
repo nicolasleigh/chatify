@@ -2,16 +2,17 @@ import { z } from "zod";
 import { baseUrl } from "./utils";
 
 type createRequestParams = {
-  clerkId: string;
   email: string;
+  token: string;
 };
-export async function createRequest({ clerkId, email }: createRequestParams) {
+export async function createRequest({ email, token }: createRequestParams) {
   const response = await fetch(`${baseUrl}/request`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ clerk_id: clerkId, email }),
+    body: JSON.stringify({ email }),
   });
   const data = await response.json();
   if (!response.ok) {
