@@ -23,7 +23,7 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useAuth } from "@clerk/nextjs";
+import { useAuthInfo } from "@/hooks/useAuthInfo";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { CirclePlus, X } from "lucide-react";
@@ -39,15 +39,16 @@ const createGroupFormSchema = z.object({
 
 export default function CreateGroupDialog() {
   const [open, setOpen] = useState(false);
-  const { userId: clerk_id } = useAuth();
+  const { userId: clerk_id, token } = useAuthInfo();
   const { data: friends } = useQuery({
     queryKey: ["friends"],
     queryFn: () => {
-      if (!clerk_id) {
-        throw new Error("User not found");
+      if (!clerk_id || !token) {
+        throw new Error("Authentication is not ready");
       }
-      return getFriends({ clerk_id });
+      return getFriends({ clerk_id, token });
     },
+    enabled: Boolean(clerk_id && token),
   });
 
   const { mutate: create, isPending } = useMutation({

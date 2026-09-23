@@ -63,10 +63,14 @@ const getFriendsSchema = z.array(
 );
 type getFriendsParams = {
   clerk_id: string;
+  token: string;
 };
-export async function getFriends({ clerk_id }: getFriendsParams): Promise<z.infer<typeof getFriendsSchema>> {
+export async function getFriends({ clerk_id, token }: getFriendsParams): Promise<z.infer<typeof getFriendsSchema>> {
   const response = await fetch(`${baseUrl}/friends/${clerk_id}`, {
     method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
   });
   if (!response.ok) {
     throw new Error(`HTTP error: ${response.status}`);
@@ -87,6 +91,7 @@ export async function deleteFriend({ conversation_id }: deleteFriendParams) {
 
 type getRequestsParams = {
   clerk_id: string;
+  token: string;
 };
 const requestsSchema = z.array(
   z.object({
@@ -99,9 +104,12 @@ const requestsSchema = z.array(
     receiver_id: z.number(),
   })
 );
-export async function getRequests({ clerk_id }: getRequestsParams): Promise<z.infer<typeof requestsSchema>> {
+export async function getRequests({ clerk_id, token }: getRequestsParams): Promise<z.infer<typeof requestsSchema>> {
   const response = await fetch(`${baseUrl}/requests/${clerk_id}`, {
     method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
   });
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);
