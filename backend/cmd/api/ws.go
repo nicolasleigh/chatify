@@ -268,7 +268,12 @@ func (app *application) handleWebSocket(hub *Hub, w http.ResponseWriter, r *http
 	}
 
 	// Validate that the user has access to this conversation
-	if !app.hasAccessToConversation(userID, conversationID) {
+	hasAccess, err := app.hasAccessToConversation(r.Context(), localUser.ID, conversationID)
+	if err != nil {
+		serverErrorResponse(w, err)
+		return
+	}
+	if !hasAccess {
 		http.Error(w, "Unauthorized access to conversation", http.StatusForbidden)
 		return
 	}
@@ -303,8 +308,9 @@ func (app *application) handleWebSocket(hub *Hub, w http.ResponseWriter, r *http
 }
 
 // Helper function to check if a user has access to a conversation
-func (app *application) hasAccessToConversation(userID string, conversationID int64) bool {
-	// Implement your access control logic here
-	// Example: Check if the user is a member of the conversation in your database
-	return true
+func (app *application) hasAccessToConversation(ctx context.Context, userID int64, conversationID int64) (bool, error) {
+	return app.query.IsConversationMember(ctx, store.IsConversationMemberParams{
+		MemberID:       userID,
+		ConversationID: conversationID,
+	})
 }

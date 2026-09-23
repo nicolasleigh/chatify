@@ -194,6 +194,27 @@ func (q *Queries) GetConversationsByClerkId(ctx context.Context, clerkID string)
 	return items, nil
 }
 
+const isConversationMember = `-- name: IsConversationMember :one
+SELECT EXISTS (
+    SELECT 1
+    FROM conversation_members
+    WHERE member_id = $1
+      AND conversation_id = $2
+) AS is_member
+`
+
+type IsConversationMemberParams struct {
+	MemberID       int64 `json:"member_id"`
+	ConversationID int64 `json:"conversation_id"`
+}
+
+func (q *Queries) IsConversationMember(ctx context.Context, arg IsConversationMemberParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isConversationMember, arg.MemberID, arg.ConversationID)
+	var is_member bool
+	err := row.Scan(&is_member)
+	return is_member, err
+}
+
 const leaveGroup = `-- name: LeaveGroup :exec
 WITH clerk_users AS (
     SELECT id 

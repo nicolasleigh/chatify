@@ -53,6 +53,14 @@ WITH clerk_users AS (
 SELECT member.conversation_id FROM conversation_members member
 JOIN clerk_users ON clerk_users.id = member.member_id;
 
+-- name: IsConversationMember :one
+SELECT EXISTS (
+    SELECT 1
+    FROM conversation_members
+    WHERE member_id = $1
+      AND conversation_id = $2
+) AS is_member;
+
 -- name: CreateGroup :exec
 WITH 
     clerk_users AS (
