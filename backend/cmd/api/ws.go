@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/nicolasleigh/chat-app/store"
@@ -36,6 +37,13 @@ type Message struct {
 	Type           *string `json:"type"`
 	Content        *string `json:"content"`
 }
+
+const (
+	websocketWriteWait      = 10 * time.Second
+	websocketPongWait       = 60 * time.Second
+	websocketPingPeriod     = (websocketPongWait * 9) / 10
+	websocketMaxMessageSize = 64 * 1024
+)
 
 func isTrustedOrigin(origin string, trustedOrigins []string) bool {
 	if origin == "" {
@@ -130,6 +138,12 @@ func (c *Client) readPump(hub *Hub, app *application) {
 		c.conn.Close()
 	}()
 
+	c.conn.SetReadLimit(websocketMaxMessageSize)
+	_ = c.conn.SetReadDeadline(time.Now().Add(websocketPongWait))
+	c.conn.SetPongHandler(func(string) error {
+		return c.conn.SetReadDeadline(time.Now().Add(websocketPongWait))
+	})
+
 	for {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
@@ -201,15 +215,25 @@ func (c *Client) writePump() {
 		c.conn.Close()
 	}()
 
+	ticker := time.NewTicker(websocketPingPeriod)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case message, ok := <-c.send:
 			if !ok {
+				_ = c.conn.SetWriteDeadline(time.Now().Add(websocketWriteWait))
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
 
+			_ = c.conn.SetWriteDeadline(time.Now().Add(websocketWriteWait))
 			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
+				return
+			}
+		case <-ticker.C:
+			_ = c.conn.SetWriteDeadline(time.Now().Add(websocketWriteWait))
+			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
 		}
