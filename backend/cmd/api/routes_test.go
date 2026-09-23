@@ -18,6 +18,20 @@ func TestMessageHistoryRequiresAuthentication(t *testing.T) {
 	}
 }
 
+func TestConversationReadsRequireAuthentication(t *testing.T) {
+	handler := (&application{}).NewRouter()
+	for _, path := range []string{"/conversation/clerk-user/1", "/conversations/clerk-user"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		recorder := httptest.NewRecorder()
+
+		handler.ServeHTTP(recorder, req)
+
+		if recorder.Code != http.StatusForbidden {
+			t.Fatalf("path %s: status = %d, want %d", path, recorder.Code, http.StatusForbidden)
+		}
+	}
+}
+
 func TestHealthRemainsPublic(t *testing.T) {
 	handler := (&application{}).NewRouter()
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)

@@ -10,7 +10,11 @@ import (
 func (app *application) getConversation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	idString := r.PathValue("conversation_id")
-	clerkIdString := r.PathValue("clerk_id")
+	clerkID, err := authenticatedClerkID(ctx)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 	conversation_id, err := strconv.Atoi(idString)
 	if err != nil {
 		badRequestResponse(w, err)
@@ -18,7 +22,7 @@ func (app *application) getConversation(w http.ResponseWriter, r *http.Request) 
 	}
 
 	payload := store.GetConversationParams{
-		ClerkID:        clerkIdString,
+		ClerkID:        clerkID,
 		ConversationID: int64(conversation_id),
 	}
 
@@ -37,10 +41,14 @@ func (app *application) getConversation(w http.ResponseWriter, r *http.Request) 
 
 func (app *application) getAllConversations(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	clerk_id := r.PathValue("clerk_id")
+	clerkID, err := authenticatedClerkID(ctx)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 	var conversations [][]store.GetConversationRow
 
-	conversationIds, err := app.query.GetConversationsByClerkId(ctx, clerk_id)
+	conversationIds, err := app.query.GetConversationsByClerkId(ctx, clerkID)
 	if err != nil {
 		badRequestResponse(w, err)
 		return
@@ -48,7 +56,7 @@ func (app *application) getAllConversations(w http.ResponseWriter, r *http.Reque
 
 	for _, conversation_id := range conversationIds {
 		payload := store.GetConversationParams{
-			ClerkID:        clerk_id,
+			ClerkID:        clerkID,
 			ConversationID: int64(conversation_id),
 		}
 		data, err := app.query.GetConversation(ctx, payload)
