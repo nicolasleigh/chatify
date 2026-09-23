@@ -52,7 +52,8 @@ WITH clerk_users AS (
     WHERE users.clerk_id = $1
 )
 DELETE FROM conversations 
-WHERE group_owner IN (SELECT id FROM clerk_users)
+WHERE conversations.is_group = true
+AND group_owner IN (SELECT id FROM clerk_users)
 AND conversations.id = $2
 `
 
