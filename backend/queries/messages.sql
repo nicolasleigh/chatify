@@ -2,7 +2,8 @@
 SELECT u.id as user_id, u.username, u.image_url, u.email, m.id as message_id, m.conversation_id as conversation_id, m.type, m.content, m.created_at FROM messages m
 JOIN users u ON u.id = m.sender_id
 WHERE conversation_id = $1
-ORDER BY m.created_at DESC;
+ORDER BY m.created_at DESC
+LIMIT $2;
 
 -- name: CreateMessage :one
 WITH messages_id AS (

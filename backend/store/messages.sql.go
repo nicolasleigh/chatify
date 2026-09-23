@@ -174,7 +174,13 @@ SELECT u.id as user_id, u.username, u.image_url, u.email, m.id as message_id, m.
 JOIN users u ON u.id = m.sender_id
 WHERE conversation_id = $1
 ORDER BY m.created_at DESC
+LIMIT $2
 `
+
+type GetMessagesParams struct {
+	ConversationID int64 `json:"conversation_id"`
+	Limit          int32 `json:"limit"`
+}
 
 type GetMessagesRow struct {
 	UserID         int64              `json:"user_id"`
@@ -188,8 +194,8 @@ type GetMessagesRow struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
-func (q *Queries) GetMessages(ctx context.Context, conversationID int64) ([]GetMessagesRow, error) {
-	rows, err := q.db.Query(ctx, getMessages, conversationID)
+func (q *Queries) GetMessages(ctx context.Context, arg GetMessagesParams) ([]GetMessagesRow, error) {
+	rows, err := q.db.Query(ctx, getMessages, arg.ConversationID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}

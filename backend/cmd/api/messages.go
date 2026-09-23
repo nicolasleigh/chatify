@@ -98,6 +98,12 @@ func (app *application) getMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	limit, err := parseMessageHistoryLimit(r.URL.Query().Get("limit"))
+	if err != nil {
+		badRequestResponse(w, err)
+		return
+	}
+
 	clerkID, err := authenticatedClerkID(ctx)
 	if err != nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
@@ -120,7 +126,10 @@ func (app *application) getMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	messages, err := app.query.GetMessages(ctx, int64(id))
+	messages, err := app.query.GetMessages(ctx, store.GetMessagesParams{
+		ConversationID: int64(id),
+		Limit:          limit,
+	})
 	if err != nil {
 		badRequestResponse(w, err)
 		return
@@ -131,6 +140,24 @@ func (app *application) getMessages(w http.ResponseWriter, r *http.Request) {
 		badRequestResponse(w, err)
 		return
 	}
+}
+
+const (
+	defaultMessageHistoryLimit int32 = 50
+	maxMessageHistoryLimit     int32 = 100
+)
+
+func parseMessageHistoryLimit(rawLimit string) (int32, error) {
+	if rawLimit == "" {
+		return defaultMessageHistoryLimit, nil
+	}
+
+	limit, err := strconv.ParseInt(rawLimit, 10, 32)
+	if err != nil || limit < 1 || limit > int64(maxMessageHistoryLimit) {
+		return 0, errors.New("message history limit must be between 1 and 100")
+	}
+
+	return int32(limit), nil
 }
 
 func (app *application) markReadMessage(w http.ResponseWriter, r *http.Request) {
