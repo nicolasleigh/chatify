@@ -69,6 +69,9 @@ Backend production configuration also supports:
 The matching `INTERNAL_WEBHOOK_SECRET` must also be present in the frontend
 server environment. Do not expose it through a `NEXT_PUBLIC_*` variable.
 
+Frontend deployments may override the backend endpoints with
+`NEXT_PUBLIC_API_BASE_URL` and `NEXT_PUBLIC_WS_BASE_URL`.
+
 ## 🧰 Tech Stack
 
 ### 💻 Frontend

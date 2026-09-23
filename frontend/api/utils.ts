@@ -1,9 +1,9 @@
-let baseUrl = "http://localhost:8084";
-let wsUrl = "ws://localhost:8084";
+let baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8084";
+let wsUrl = process.env.NEXT_PUBLIC_WS_BASE_URL || "ws://localhost:8084";
 
 if (process.env.NODE_ENV === "production") {
-  baseUrl = "https://back.chat.linze.pro";
-  wsUrl = "wss://back.chat.linze.pro";
+  baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://back.chat.linze.pro";
+  wsUrl = process.env.NEXT_PUBLIC_WS_BASE_URL || "wss://back.chat.linze.pro";
 }
 
 export { baseUrl, wsUrl };
