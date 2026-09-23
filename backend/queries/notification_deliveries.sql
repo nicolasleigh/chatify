@@ -22,6 +22,19 @@ WHERE conversation_id = $1
   AND member_id <> $2
 ORDER BY member_id;
 
+-- name: GetNotificationMessage :one
+-- Notification content is loaded at delivery time so the RabbitMQ event and
+-- delivery table only carry stable IDs. If a message was removed before its
+-- notification was sent, the worker can skip the delivery safely.
+SELECT
+    message.content,
+    sender.username AS sender_username,
+    conversation.name AS conversation_name
+FROM messages AS message
+JOIN users AS sender ON sender.id = message.sender_id
+JOIN conversations AS conversation ON conversation.id = message.conversation_id
+WHERE message.id = $1;
+
 -- name: ClaimNotificationDeliveries :many
 -- Lease a bounded batch so multiple delivery workers can operate concurrently
 -- without sending the same row at the same time. A stale processing lease is

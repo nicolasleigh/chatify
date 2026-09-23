@@ -81,6 +81,33 @@ func (q *Queries) GetConversationNotificationRecipients(ctx context.Context, arg
 	return items, nil
 }
 
+const getNotificationMessage = `-- name: GetNotificationMessage :one
+-- Notification content is loaded at delivery time so the RabbitMQ event and
+-- delivery table only carry stable IDs. If a message was removed before its
+-- notification was sent, the worker can skip the delivery safely.
+SELECT
+    message.content,
+    sender.username AS sender_username,
+    conversation.name AS conversation_name
+FROM messages AS message
+JOIN users AS sender ON sender.id = message.sender_id
+JOIN conversations AS conversation ON conversation.id = message.conversation_id
+WHERE message.id = $1
+`
+
+type GetNotificationMessageRow struct {
+	Content          *string `json:"content"`
+	SenderUsername   string  `json:"sender_username"`
+	ConversationName *string `json:"conversation_name"`
+}
+
+func (q *Queries) GetNotificationMessage(ctx context.Context, id int64) (GetNotificationMessageRow, error) {
+	row := q.db.QueryRow(ctx, getNotificationMessage, id)
+	var i GetNotificationMessageRow
+	err := row.Scan(&i.Content, &i.SenderUsername, &i.ConversationName)
+	return i, err
+}
+
 const claimNotificationDeliveries = `-- name: ClaimNotificationDeliveries :many
 -- Lease a bounded batch so multiple delivery workers can operate concurrently
 -- without sending the same row at the same time. A stale processing lease is
