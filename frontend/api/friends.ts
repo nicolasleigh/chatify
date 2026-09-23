@@ -88,11 +88,18 @@ export async function getFriends({ clerk_id, token }: getFriendsParams): Promise
 
 type deleteFriendParams = {
   conversation_id: number;
+  token: string;
 };
-export async function deleteFriend({ conversation_id }: deleteFriendParams) {
-  await fetch(`${baseUrl}/friend/${conversation_id}`, {
+export async function deleteFriend({ conversation_id, token }: deleteFriendParams) {
+  const response = await fetch(`${baseUrl}/friend/${conversation_id}`, {
     method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
   });
+  if (!response.ok) {
+    throw new Error(`HTTP error: ${response.status}`);
+  }
 }
 
 type getRequestsParams = {

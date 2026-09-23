@@ -9,6 +9,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useAuthInfo } from "@/hooks/useAuthInfo";
 import { useMutation } from "@tanstack/react-query";
 import { Dispatch, SetStateAction } from "react";
 import { toast } from "sonner";
@@ -20,9 +21,13 @@ type Props = {
 };
 
 export default function RemoveFriendDialog({ conversationId, open, setOpen }: Props) {
+  const { token } = useAuthInfo();
   const { mutate: removeFriend, isPending } = useMutation({
     mutationFn: () => {
-      return deleteFriend({ conversation_id: conversationId });
+      if (!token) {
+        throw new Error("Authentication is not ready");
+      }
+      return deleteFriend({ conversation_id: conversationId, token });
     },
     onSuccess: () => {
       toast.success("Friend delete successfully");
