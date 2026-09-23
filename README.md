@@ -76,6 +76,22 @@ server environment. Do not expose it through a `NEXT_PUBLIC_*` variable.
 Frontend deployments may override the backend endpoints with
 `NEXT_PUBLIC_API_BASE_URL` and `NEXT_PUBLIC_WS_BASE_URL`.
 
+RabbitMQ is used through a transactional PostgreSQL Outbox. Each HTTP or
+WebSocket message write stores the chat message, updates the conversation
+preview, and creates a `message.created` event in one database transaction. A
+background worker then publishes the event to the durable RabbitMQ topic
+exchange and only marks the Outbox row as published after a broker publisher
+confirmation. Temporary failures are retried with exponential backoff; events
+that exceed the retry limit remain in the database with status `failed` for
+inspection and replay.
+
+For Compose deployments, create these local secret files with one value per
+file: `db_user.txt`, `db_password.txt`, `rabbitmq_user.txt`, and
+`rabbitmq_password.txt`. Set `RABBITMQ_URL` in the deployment environment to
+the matching private-network URL, for example
+`amqp://user:password@rabbitmq:5672/`, then run `docker compose up --build`.
+Do not commit any of those secret files.
+
 ## 🧰 Tech Stack
 
 ### 💻 Frontend
@@ -93,6 +109,11 @@ Frontend deployments may override the backend endpoints with
 ### 🗄 Database
 
 * **PostgreSQL** – Relational database with schema migrations via `golang-migrate`
+
+### 📨 Asynchronous Events
+
+* **RabbitMQ** – Durable topic exchange with publisher confirms
+* **Transactional Outbox** – Database-backed retry and failure retention
 
 ### 🔌 Real-Time & Auth
 
