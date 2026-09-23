@@ -86,6 +86,7 @@ const getNotificationMessage = `-- name: GetNotificationMessage :one
 -- delivery table only carry stable IDs. If a message was removed before its
 -- notification was sent, the worker can skip the delivery safely.
 SELECT
+    conversation.id AS conversation_id,
     message.content,
     sender.username AS sender_username,
     conversation.name AS conversation_name
@@ -96,6 +97,7 @@ WHERE message.id = $1
 `
 
 type GetNotificationMessageRow struct {
+	ConversationID   int64   `json:"conversation_id"`
 	Content          *string `json:"content"`
 	SenderUsername   string  `json:"sender_username"`
 	ConversationName *string `json:"conversation_name"`
@@ -104,7 +106,7 @@ type GetNotificationMessageRow struct {
 func (q *Queries) GetNotificationMessage(ctx context.Context, id int64) (GetNotificationMessageRow, error) {
 	row := q.db.QueryRow(ctx, getNotificationMessage, id)
 	var i GetNotificationMessageRow
-	err := row.Scan(&i.Content, &i.SenderUsername, &i.ConversationName)
+	err := row.Scan(&i.ConversationID, &i.Content, &i.SenderUsername, &i.ConversationName)
 	return i, err
 }
 

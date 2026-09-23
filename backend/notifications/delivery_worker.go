@@ -27,6 +27,7 @@ type DeliveryWorkerRepository interface {
 	GetNotificationDelivery(ctx context.Context, id int64) (store.GetNotificationDeliveryRow, error)
 	GetNotificationMessage(ctx context.Context, id int64) (store.GetNotificationMessageRow, error)
 	MarkNotificationDeliverySent(ctx context.Context, id int64) error
+	MarkPushSubscriptionUsed(ctx context.Context, id int64) error
 	MarkNotificationDeliveryFailed(ctx context.Context, arg store.MarkNotificationDeliveryFailedParams) error
 	DisablePushSubscriptionByEndpoint(ctx context.Context, endpoint string) error
 }
@@ -149,6 +150,9 @@ func (w *DeliveryWorker) deliver(ctx context.Context, claimed store.ClaimNotific
 		if markErr := w.repository.MarkNotificationDeliverySent(ctx, claimed.ID); markErr != nil && ctx.Err() == nil {
 			w.logger.Error("mark notification delivery sent", "delivery_id", claimed.ID, "error", markErr)
 		}
+		if markErr := w.repository.MarkPushSubscriptionUsed(ctx, delivery.SubscriptionID); markErr != nil && ctx.Err() == nil {
+			w.logger.Error("mark push subscription used", "subscription_id", delivery.SubscriptionID, "error", markErr)
+		}
 		return
 	}
 	if ctx.Err() != nil {
@@ -222,9 +226,10 @@ func buildPayload(messageID int64, message store.GetNotificationMessageRow) Payl
 	}
 
 	return Payload{
-		Title:     title,
-		Body:      body,
-		MessageID: messageID,
+		Title:          title,
+		Body:           body,
+		ConversationID: message.ConversationID,
+		MessageID:      messageID,
 	}
 }
 

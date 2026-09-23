@@ -27,6 +27,7 @@ ORDER BY member_id;
 -- delivery table only carry stable IDs. If a message was removed before its
 -- notification was sent, the worker can skip the delivery safely.
 SELECT
+    conversation.id AS conversation_id,
     message.content,
     sender.username AS sender_username,
     conversation.name AS conversation_name

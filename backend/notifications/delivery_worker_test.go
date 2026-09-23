@@ -29,6 +29,7 @@ func TestBuildPayloadUsesConversationAndTruncatesBody(t *testing.T) {
 	conversationName := "Project Chat"
 	content := strings.Repeat("message ", 40)
 	payload := buildPayload(42, store.GetNotificationMessageRow{
+		ConversationID:   7,
 		Content:          &content,
 		SenderUsername:   "Alice",
 		ConversationName: &conversationName,
@@ -39,6 +40,9 @@ func TestBuildPayloadUsesConversationAndTruncatesBody(t *testing.T) {
 	}
 	if payload.MessageID != 42 {
 		t.Fatalf("message ID = %d, want 42", payload.MessageID)
+	}
+	if payload.ConversationID != 7 {
+		t.Fatalf("conversation ID = %d, want 7", payload.ConversationID)
 	}
 	if len([]rune(payload.Body)) > maxNotificationBodyRunes {
 		t.Fatalf("body has %d runes, want at most %d", len([]rune(payload.Body)), maxNotificationBodyRunes)
