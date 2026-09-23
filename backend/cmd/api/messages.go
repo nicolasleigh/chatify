@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/nicolasleigh/chat-app/store"
 )
@@ -34,6 +35,10 @@ func (app *application) createMessage(w http.ResponseWriter, r *http.Request) {
 		badRequestResponse(w, err)
 		return
 	}
+	if err := validateCreateMessageInput(body.ConversationID, body.Type, body.Content); err != nil {
+		badRequestResponse(w, err)
+		return
+	}
 	payload.Content = body.Content
 	payload.ID = body.ConversationID
 	payload.SenderID = localUser.ID
@@ -60,6 +65,28 @@ func (app *application) createMessage(w http.ResponseWriter, r *http.Request) {
 		badRequestResponse(w, err)
 		return
 	}
+}
+
+const maxMessageContentBytes = 64 * 1024
+
+func validateCreateMessageInput(conversationID int64, messageType, content *string) error {
+	if conversationID <= 0 {
+		return errors.New("conversation ID must be positive")
+	}
+	if messageType == nil || strings.TrimSpace(*messageType) == "" {
+		return errors.New("message type is required")
+	}
+	if len(*messageType) > 200 {
+		return errors.New("message type is too long")
+	}
+	if content == nil || len(*content) == 0 {
+		return errors.New("message content is required")
+	}
+	if len(*content) > maxMessageContentBytes {
+		return errors.New("message content is too long")
+	}
+
+	return nil
 }
 
 func (app *application) getMessages(w http.ResponseWriter, r *http.Request) {
