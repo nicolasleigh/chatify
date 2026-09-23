@@ -32,7 +32,10 @@ WHERE conversation_id = $1 AND member_id = $2;
 SELECT sender_id, users.username as sender_username, users.image_url as sender_image_url, content, type 
 FROM messages
 JOIN users ON users.id = sender_id
-WHERE messages.id = $1;
+JOIN conversation_members ON conversation_members.conversation_id = messages.conversation_id
+JOIN users viewer ON viewer.id = conversation_members.member_id
+WHERE messages.id = $1
+  AND viewer.clerk_id = $2;
 
 -- name: GetAllUnseenMessageCount :many
 WITH 

@@ -110,7 +110,16 @@ func (app *application) getConversationLastMessage(w http.ResponseWriter, r *htt
 		return
 	}
 
-	message, err := app.query.GetConversationLastMessage(ctx, int64(message_id))
+	clerkID, err := authenticatedClerkID(ctx)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	message, err := app.query.GetConversationLastMessage(ctx, store.GetConversationLastMessageParams{
+		ID:      int64(message_id),
+		ClerkID: clerkID,
+	})
 	if err != nil {
 		badRequestResponse(w, err)
 		return

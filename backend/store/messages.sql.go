@@ -102,8 +102,16 @@ const getConversationLastMessage = `-- name: GetConversationLastMessage :one
 SELECT sender_id, users.username as sender_username, users.image_url as sender_image_url, content, type 
 FROM messages
 JOIN users ON users.id = sender_id
+JOIN conversation_members ON conversation_members.conversation_id = messages.conversation_id
+JOIN users viewer ON viewer.id = conversation_members.member_id
 WHERE messages.id = $1
+  AND viewer.clerk_id = $2
 `
+
+type GetConversationLastMessageParams struct {
+	ID      int64  `json:"id"`
+	ClerkID string `json:"clerk_id" validate:"required"`
+}
 
 type GetConversationLastMessageRow struct {
 	SenderID       int64   `json:"sender_id"`
@@ -113,8 +121,8 @@ type GetConversationLastMessageRow struct {
 	Type           *string `json:"type"`
 }
 
-func (q *Queries) GetConversationLastMessage(ctx context.Context, id int64) (GetConversationLastMessageRow, error) {
-	row := q.db.QueryRow(ctx, getConversationLastMessage, id)
+func (q *Queries) GetConversationLastMessage(ctx context.Context, arg GetConversationLastMessageParams) (GetConversationLastMessageRow, error) {
+	row := q.db.QueryRow(ctx, getConversationLastMessage, arg.ID, arg.ClerkID)
 	var i GetConversationLastMessageRow
 	err := row.Scan(
 		&i.SenderID,
