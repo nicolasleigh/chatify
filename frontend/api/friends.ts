@@ -40,17 +40,18 @@ export async function denyRequest({ request_id }: denyRequestParams) {
 
 type acceptRequestParams = {
   request_id: number;
-  column_1: number;
-  column_2: number;
+  token: string;
 };
-export async function acceptRequest({ request_id, column_1, column_2 }: acceptRequestParams) {
-  await fetch(`${baseUrl}/request/accept/${request_id}`, {
+export async function acceptRequest({ request_id, token }: acceptRequestParams) {
+  const response = await fetch(`${baseUrl}/request/accept/${request_id}`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ column_1, column_2 }),
   });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
 }
 
 const getFriendsSchema = z.array(

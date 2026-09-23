@@ -2,6 +2,7 @@ import { acceptRequest, denyRequest } from "@/api/friends";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { useAuthInfo } from "@/hooks/useAuthInfo";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, User, X } from "lucide-react";
 import { toast } from "sonner";
@@ -11,11 +12,10 @@ type Props = {
   imageUrl: string;
   username: string;
   email: string;
-  senderId: number;
-  receiverId: number;
 };
 
-export default function Request({ id, imageUrl, email, username, senderId, receiverId }: Props) {
+export default function Request({ id, imageUrl, email, username }: Props) {
+  const { token } = useAuthInfo();
   const queryClient = useQueryClient();
 
   const { mutate: deny, isPending: denyPending } = useMutation({
@@ -30,7 +30,12 @@ export default function Request({ id, imageUrl, email, username, senderId, recei
   });
 
   const { mutate: accept, isPending: acceptPending } = useMutation({
-    mutationFn: () => acceptRequest({ request_id: id, column_1: senderId, column_2: receiverId }),
+    mutationFn: () => {
+      if (!token) {
+        throw new Error("Authentication is not ready");
+      }
+      return acceptRequest({ request_id: id, token });
+    },
     onSuccess: () => {
       toast.success("Friend request accept");
       queryClient.invalidateQueries({ queryKey: ["friend_requests"] });

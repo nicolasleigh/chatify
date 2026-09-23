@@ -33,8 +33,6 @@ export default function FriendsPage() {
                 <Request
                   key={req.id}
                   id={req.id}
-                  senderId={req.sender_id}
-                  receiverId={req.receiver_id}
                   imageUrl={req.image_url}
                   username={req.username}
                   email={req.email}
