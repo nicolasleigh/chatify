@@ -10,36 +10,45 @@ import (
 )
 
 const acceptRequest = `-- name: AcceptRequest :exec
-WITH new_conversation AS (
-  -- First, create the conversation
+WITH deleted_request AS (
+  DELETE FROM friend_requests request
+  USING users receiver
+  WHERE request.id = $1
+    AND request.receiver_id = receiver.id
+    AND receiver.clerk_id = $2
+  RETURNING request.sender_id, request.receiver_id
+),
+new_conversation AS (
   INSERT INTO conversations (is_group)
-  VALUES (false)
+  SELECT false
+  FROM deleted_request
   RETURNING id AS conversation_id
 ),
 friend_insert AS (
-  -- Insert friendship with ordered user IDs
   INSERT INTO friends (user_a_id, user_b_id, conversation_id)
   SELECT 
-    LEAST($1::bigint, $2::bigint),  -- Ensure user_a_id < user_b_id
-    GREATEST($1::bigint, $2::bigint),
-    conversation_id
-  FROM new_conversation
-  RETURNING conversation_id
+    LEAST(request.sender_id, request.receiver_id),
+    GREATEST(request.sender_id, request.receiver_id),
+    conversation.conversation_id
+  FROM deleted_request request
+  CROSS JOIN new_conversation conversation
+  RETURNING user_a_id, user_b_id, conversation_id
 )
 INSERT INTO conversation_members (member_id, conversation_id)
-SELECT user_id, conversation_id
+SELECT member_id, conversation_id
 FROM friend_insert
-CROSS JOIN (VALUES (LEAST($1::bigint, $2::bigint)), (GREATEST($1::bigint, $2::bigint))) AS users(user_id)
+CROSS JOIN LATERAL (
+  VALUES (friend_insert.user_a_id), (friend_insert.user_b_id)
+) AS members(member_id)
 `
 
 type AcceptRequestParams struct {
-	Column1 int64 `json:"column_1"`
-	Column2 int64 `json:"column_2"`
+	ID      int64  `json:"id"`
+	ClerkID string `json:"clerk_id" validate:"required"`
 }
 
-// Insert both users into conversation_members
 func (q *Queries) AcceptRequest(ctx context.Context, arg AcceptRequestParams) error {
-	_, err := q.db.Exec(ctx, acceptRequest, arg.Column1, arg.Column2)
+	_, err := q.db.Exec(ctx, acceptRequest, arg.ID, arg.ClerkID)
 	return err
 }
 

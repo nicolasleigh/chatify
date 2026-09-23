@@ -91,8 +91,6 @@ func (app *application) denyRequest(w http.ResponseWriter, r *http.Request) {
 
 func (app *application) acceptRequest(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	body := r.Body
-	defer body.Close()
 
 	idString := r.PathValue("request_id")
 
@@ -102,28 +100,15 @@ func (app *application) acceptRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: change to clerk_id
-	var payload store.AcceptRequestParams
-
-	err = readJSON(w, r, &payload)
+	clerkID, err := authenticatedClerkID(ctx)
 	if err != nil {
-		badRequestResponse(w, err)
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	err = Validate.Struct(payload)
-	if err != nil {
-		badRequestResponse(w, err)
-		return
-	}
+	payload := store.AcceptRequestParams{ID: int64(request_id), ClerkID: clerkID}
 
 	err = app.query.AcceptRequest(ctx, payload)
-	if err != nil {
-		badRequestResponse(w, err)
-		return
-	}
-
-	_, err = app.query.DeleteRequest(ctx, int64(request_id))
 	if err != nil {
 		badRequestResponse(w, err)
 		return
