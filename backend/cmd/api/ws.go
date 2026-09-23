@@ -17,6 +17,7 @@ import (
 type Client struct {
 	conn           *websocket.Conn
 	send           chan []byte
+	ctx            context.Context
 	userID         string
 	senderID       int64
 	conversationID int64
@@ -190,13 +191,13 @@ func (c *Client) readPump(hub *Hub, app *application) {
 			Type:     msg.Type,
 		}
 
-		messageId, err := app.query.CreateMessage(context.Background(), payload)
+		messageId, err := app.query.CreateMessage(c.ctx, payload)
 		if err != nil {
 			log.Printf("Error storing message: %v", err)
 			continue
 		}
 
-		returnMessage, err := app.query.GetMessageById(context.Background(), int64(messageId))
+		returnMessage, err := app.query.GetMessageById(c.ctx, int64(messageId))
 		if err != nil {
 			log.Printf("Error get message: %v", err)
 			continue
@@ -295,6 +296,7 @@ func (app *application) handleWebSocket(hub *Hub, w http.ResponseWriter, r *http
 	client := &Client{
 		conn:           conn,
 		send:           make(chan []byte, 256),
+		ctx:            r.Context(),
 		userID:         userID,
 		senderID:       localUser.ID,
 		conversationID: conversationID,
