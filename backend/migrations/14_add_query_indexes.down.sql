@@ -1,0 +1,5 @@
+DROP INDEX IF EXISTS idx_friends_conversation;
+DROP INDEX IF EXISTS idx_friend_requests_receiver_created;
+DROP INDEX IF EXISTS idx_messages_conversation_created_id;
+DROP INDEX IF EXISTS idx_conversation_members_conversation_member;
+DROP INDEX IF EXISTS idx_conversation_members_member_conversation;
