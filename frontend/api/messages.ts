@@ -87,12 +87,17 @@ const getConversationLastMessageSchema = z.object({
 
 type getConversationLastMessageParams = {
   message_id: number;
+  token: string;
 };
 export async function getConversationLastMessage({
   message_id,
+  token,
 }: getConversationLastMessageParams): Promise<z.infer<typeof getConversationLastMessageSchema>> {
   const response = await fetch(`${baseUrl}/message/${message_id}`, {
     method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
   });
   if (!response.ok) {
     throw new Error(`HTTP error: ${response.status}`);
