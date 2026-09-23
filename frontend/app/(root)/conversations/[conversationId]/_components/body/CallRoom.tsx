@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import useConversation from "@/hooks/useConversation";
 import useMutationState from "@/hooks/useMutationState";
-import { useUser } from "@clerk/nextjs";
 import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -18,19 +17,19 @@ type Props = {
 };
 
 export default function CallRoom({ video, audio, handleDisconnect }: Props) {
-  const { user } = useUser();
   const [token, setToken] = useState("");
   const { conversationId } = useConversation();
   const { mutate: createMessage } = useMutationState(api.message.create);
 
   useEffect(() => {
-    if (!user?.fullName) return;
     (async () => {
       try {
-        const res = await fetch(
-          `/api/livekit?room=${conversationId}&username=${user.fullName} (${Math.floor(Math.random() * 2000)})`
-        );
+        const res = await fetch(`/api/livekit?room=${conversationId}`);
         const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || "Could not join the call");
+        }
 
         setToken(data.token);
       } catch (error) {
@@ -38,7 +37,7 @@ export default function CallRoom({ video, audio, handleDisconnect }: Props) {
         console.log(error);
       }
     })();
-  }, [user?.fullName, conversationId]);
+  }, [conversationId]);
 
   if (token === "") {
     return (
