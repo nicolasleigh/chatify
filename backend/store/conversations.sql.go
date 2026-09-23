@@ -112,6 +112,12 @@ JOIN conv ON conv.id = member.conversation_id
 JOIN users ON users.id = member.member_id
 WHERE member.member_id != (SELECT id FROM clerk_users)
   AND member.conversation_id = $2
+  AND EXISTS (
+      SELECT 1
+      FROM conversation_members viewer
+      WHERE viewer.member_id = (SELECT id FROM clerk_users)
+        AND viewer.conversation_id = $2
+  )
 `
 
 type GetConversationParams struct {
