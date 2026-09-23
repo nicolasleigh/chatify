@@ -19,6 +19,30 @@ services:
     expose:
       - "5432"
 
+  rabbitmq:
+    restart: always
+    image: rabbitmq:3.13.7-management-alpine
+    container_name: chatify-rabbitmq
+    environment:
+      # Keep broker credentials in local secret files, matching the existing
+      # PostgreSQL setup. These files must not be committed to the repository.
+      RABBITMQ_DEFAULT_USER_FILE: /run/secrets/rabbitmq_user
+      RABBITMQ_DEFAULT_PASS_FILE: /run/secrets/rabbitmq_password
+    secrets:
+      - rabbitmq_user
+      - rabbitmq_password
+    networks:
+      - backend_network
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    expose:
+      - "5672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   backend:
     restart: always
     build:
@@ -28,10 +52,18 @@ services:
     env_file: "./backend/.envrc"
     environment:
       APP_ENV: production
+      # The backend reaches RabbitMQ through the private Compose network. Set
+      # this in the deployment environment with the same credentials as the
+      # rabbitmq service, for example amqp://user:password@rabbitmq:5672/.
+      RABBITMQ_URL: ${RABBITMQ_URL:?set RABBITMQ_URL}
+      RABBITMQ_EVENTS_EXCHANGE: ${RABBITMQ_EVENTS_EXCHANGE:-chatify.events}
+      OUTBOX_POLL_INTERVAL_SECONDS: ${OUTBOX_POLL_INTERVAL_SECONDS:-1}
+      OUTBOX_BATCH_SIZE: ${OUTBOX_BATCH_SIZE:-50}
     networks:
       - backend_network
     depends_on:
       - postgres
+      - rabbitmq
     ports:
       - "127.0.0.1:8084:8084"
 
@@ -53,9 +85,14 @@ secrets:
     file: db_user.txt
   db_password:
     file: db_password.txt
+  rabbitmq_user:
+    file: rabbitmq_user.txt
+  rabbitmq_password:
+    file: rabbitmq_password.txt
 
 volumes:
   postgres_data:
+  rabbitmq_data:
 
 networks:
   backend_network:
