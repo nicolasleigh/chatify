@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/clerk/clerk-sdk-go/v2"
 	clerkhttp "github.com/clerk/clerk-sdk-go/v2/http"
@@ -28,9 +29,14 @@ func (app *application) NewServer() *http.Server {
 	// wrappedMux := app.enableCORS(mux)
 
 	srv := &http.Server{
-		Addr:     fmt.Sprintf(":%d", app.config.port),
-		Handler:  wrappedMux,
-		ErrorLog: errLog,
+		Addr:              fmt.Sprintf(":%d", app.config.port),
+		Handler:           wrappedMux,
+		ErrorLog:          errLog,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 20,
 	}
 	return srv
 }
