@@ -71,21 +71,27 @@ func (app *application) getMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// claims, ok := clerk.SessionClaimsFromContext(ctx)
-	// if !ok {
-	// 	w.WriteHeader(http.StatusUnauthorized)
-	// 	w.Write([]byte(`{"access": "unauthorized"}`))
-	// 	return
-	// }
-	// usr, err := user.Get(ctx, claims.Subject)
-	// if err != nil {
-	// 	badRequestResponse(w, err)
-	// 	return
-	// }
-	// if usr == nil {
-	// 	badRequestResponse(w, fmt.Errorf("User does not exist: %v", err))
-	// 	return
-	// }
+	clerkID, err := authenticatedClerkID(ctx)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	localUser, err := app.query.GetUser(ctx, clerkID)
+	if err != nil {
+		serverErrorResponse(w, err)
+		return
+	}
+
+	hasAccess, err := app.hasAccessToConversation(ctx, localUser.ID, int64(id))
+	if err != nil {
+		serverErrorResponse(w, err)
+		return
+	}
+	if !hasAccess {
+		forbiddenResponse(w, errors.New("conversation access denied"))
+		return
+	}
 
 	messages, err := app.query.GetMessages(ctx, int64(id))
 	if err != nil {
