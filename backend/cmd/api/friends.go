@@ -127,14 +127,13 @@ func (app *application) acceptRequest(w http.ResponseWriter, r *http.Request) {
 func (app *application) getFriends(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	idString := r.PathValue("clerk_id")
-	// id, err := strconv.Atoi(idString)
-	// if err != nil {
-	// 	badRequestResponse(w, err)
-	// 	return
-	// }
+	clerkID, err := authenticatedClerkID(ctx)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-	friends, err := app.query.GetFriends(ctx, idString)
+	friends, err := app.query.GetFriends(ctx, clerkID)
 	if err != nil {
 		badRequestResponse(w, err)
 		return
@@ -170,9 +169,13 @@ func (app *application) deleteFriend(w http.ResponseWriter, r *http.Request) {
 func (app *application) getRequests(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	idString := r.PathValue("clerk_id")
+	clerkID, err := authenticatedClerkID(ctx)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-	friendReq, err := app.query.GetRequests(ctx, idString)
+	friendReq, err := app.query.GetRequests(ctx, clerkID)
 	if err != nil {
 		badRequestResponse(w, err)
 		return
