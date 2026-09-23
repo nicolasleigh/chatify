@@ -13,6 +13,8 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/nicolasleigh/chat-app/env"
+	"github.com/nicolasleigh/chat-app/messaging/rabbitmq"
+	"github.com/nicolasleigh/chat-app/outbox"
 	"github.com/nicolasleigh/chat-app/pg"
 	"github.com/nicolasleigh/chat-app/store"
 )
@@ -124,6 +126,41 @@ func main() {
 	q := store.New(db.DB)
 
 	slog.Info("database connection pool established!")
+
+	publisher, err := rabbitmq.New(rabbitmq.Config{
+		URL:            cfg.rabbitmq.url,
+		EventsExchange: cfg.rabbitmq.exchange,
+	})
+	if err != nil {
+		slog.Error("rabbitmq publisher initialization failed", "error", err)
+		os.Exit(1)
+	}
+
+	worker, err := outbox.New(q, publisher, outbox.Config{
+		PollInterval: cfg.rabbitmq.pollInterval,
+		BatchSize:    cfg.rabbitmq.batchSize,
+		Logger:       NewLog,
+	})
+	if err != nil {
+		_ = publisher.Close()
+		slog.Error("outbox worker initialization failed", "error", err)
+		os.Exit(1)
+	}
+	workerCtx, stopWorker := context.WithCancel(context.Background())
+	workerDone := make(chan struct{})
+	go func() {
+		defer close(workerDone)
+		worker.Run(workerCtx)
+	}()
+	defer func() {
+		// Stop claiming new rows first and wait for an in-flight publish to
+		// finish or observe cancellation before closing its AMQP channel.
+		stopWorker()
+		<-workerDone
+		if err := publisher.Close(); err != nil {
+			slog.Error("rabbitmq publisher shutdown failed", "error", err)
+		}
+	}()
 
 	app := &application{
 		config: cfg,
