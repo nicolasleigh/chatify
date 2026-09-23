@@ -26,7 +26,9 @@ type application struct {
 }
 
 type dbConfig struct {
-	dsn string
+	dsn      string
+	maxConns int32
+	minConns int32
 }
 
 type cors struct {
@@ -54,8 +56,9 @@ func main() {
 	cfg := config{
 		port: env.GetInt("PORT", 8084),
 		db: dbConfig{
-			// dsn: env.GetString("DB_DSN", "postgres://admin:adminpassword@localhost:5432/chat?sslmode=disable"),
-			dsn: dsnEnv,
+			dsn:      dsnEnv,
+			maxConns: int32(env.GetInt("DB_MAX_CONNS", 10)),
+			minConns: int32(env.GetInt("DB_MIN_CONNS", 2)),
 		},
 		cors: cors{
 			trustedOrigins: []string{"http://localhost:3000", "https://chat.linze.pro"},
@@ -65,7 +68,10 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	db, err := pg.NewPG(ctx, cfg.db.dsn)
+	db, err := pg.NewPG(ctx, cfg.db.dsn, pg.PoolConfig{
+		MaxConns: cfg.db.maxConns,
+		MinConns: cfg.db.minConns,
+	})
 	if err != nil {
 		slog.Error("database connection pool initialization failed", "error", err)
 		os.Exit(1)
