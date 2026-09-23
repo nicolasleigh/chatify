@@ -68,13 +68,21 @@ JOIN friends ON (
 );
 
 -- name: DeleteFriend :exec
-WITH deleted_friends AS (
+WITH clerk_user AS (
+    SELECT id
+    FROM users
+    WHERE clerk_id = $2
+), deleted_friend AS (
     DELETE FROM friends
     WHERE conversation_id = $1
-    RETURNING *
+      AND (
+          user_a_id = (SELECT id FROM clerk_user)
+          OR user_b_id = (SELECT id FROM clerk_user)
+      )
+    RETURNING conversation_id
 )
 DELETE FROM conversations
-WHERE conversations.id = $1;
+WHERE conversations.id IN (SELECT conversation_id FROM deleted_friend);
 -- Legacy:
 -- WITH deleted_friend AS (
 --   DELETE FROM friends 

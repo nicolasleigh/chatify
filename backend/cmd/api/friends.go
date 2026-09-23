@@ -154,22 +154,29 @@ func (app *application) getFriends(w http.ResponseWriter, r *http.Request) {
 
 func (app *application) deleteFriend(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	clerkID, err := authenticatedClerkID(ctx)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	idStr := r.PathValue("conversation_id")
-	conversation_id, err := strconv.Atoi(idStr)
-
-	// var payload store.DeleteFriendParams
-
-	// err := readJSON(w, r, &payload)
-	// if err != nil {
-	// 	badRequestResponse(w, err)
-	// 	return
-	// }
-
-	err = app.query.DeleteFriend(ctx, int64(conversation_id))
+	conversationID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		badRequestResponse(w, err)
 		return
 	}
+
+	err = app.query.DeleteFriend(ctx, store.DeleteFriendParams{
+		ConversationID: &conversationID,
+		ClerkID:        clerkID,
+	})
+	if err != nil {
+		badRequestResponse(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (app *application) getRequests(w http.ResponseWriter, r *http.Request) {

@@ -23,7 +23,7 @@ func (app *application) NewRouter() http.Handler {
 	mux.Handle("DELETE /deny/{request_id}", requireAuth(http.HandlerFunc(app.denyRequest)))
 	mux.Handle("POST /request/accept/{request_id}", requireAuth(http.HandlerFunc(app.acceptRequest)))
 	mux.Handle("GET /friends/{clerk_id}", requireAuth(http.HandlerFunc(app.getFriends)))
-	mux.HandleFunc("DELETE /friend/{conversation_id}", app.deleteFriend)
+	mux.Handle("DELETE /friend/{conversation_id}", requireAuth(http.HandlerFunc(app.deleteFriend)))
 	mux.Handle("GET /requests/{clerk_id}", requireAuth(http.HandlerFunc(app.getRequests)))
 	// Message
 	mux.Handle("POST /message", requireAuth(http.HandlerFunc(app.createMessage)))

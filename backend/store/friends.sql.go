@@ -79,17 +79,30 @@ func (q *Queries) CreateRequest(ctx context.Context, arg CreateRequestParams) er
 }
 
 const deleteFriend = `-- name: DeleteFriend :exec
-WITH deleted_friends AS (
+WITH clerk_user AS (
+    SELECT id
+    FROM users
+    WHERE clerk_id = $2
+), deleted_friend AS (
     DELETE FROM friends
     WHERE conversation_id = $1
-    RETURNING id, user_a_id, user_b_id, created_at, conversation_id
+      AND (
+          user_a_id = (SELECT id FROM clerk_user)
+          OR user_b_id = (SELECT id FROM clerk_user)
+      )
+    RETURNING conversation_id
 )
 DELETE FROM conversations
-WHERE conversations.id = $1
+WHERE conversations.id IN (SELECT conversation_id FROM deleted_friend)
 `
 
-func (q *Queries) DeleteFriend(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deleteFriend, id)
+type DeleteFriendParams struct {
+	ConversationID *int64 `json:"conversation_id"`
+	ClerkID        string `json:"clerk_id" validate:"required"`
+}
+
+func (q *Queries) DeleteFriend(ctx context.Context, arg DeleteFriendParams) error {
+	_, err := q.db.Exec(ctx, deleteFriend, arg.ConversationID, arg.ClerkID)
 	return err
 }
 
