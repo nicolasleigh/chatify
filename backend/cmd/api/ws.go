@@ -18,6 +18,7 @@ type Client struct {
 	conn           *websocket.Conn
 	send           chan []byte
 	userID         string
+	senderID       int64
 	conversationID int64
 }
 
@@ -185,7 +186,7 @@ func (c *Client) readPump(hub *Hub, app *application) {
 		payload := store.CreateMessageParams{
 			Content:  msg.Content,
 			ID:       msg.ConversationID,
-			SenderID: msg.SenderID,
+			SenderID: c.senderID,
 			Type:     msg.Type,
 		}
 
@@ -260,6 +261,11 @@ func (app *application) handleWebSocket(hub *Hub, w http.ResponseWriter, r *http
 
 	// userID := getUserIDFromRequest(r) // Implement this based on your auth system
 	userID := clerkUser.ID
+	localUser, err := app.query.GetUser(r.Context(), userID)
+	if err != nil {
+		serverErrorResponse(w, err)
+		return
+	}
 
 	// Validate that the user has access to this conversation
 	if !app.hasAccessToConversation(userID, conversationID) {
@@ -285,6 +291,7 @@ func (app *application) handleWebSocket(hub *Hub, w http.ResponseWriter, r *http
 		conn:           conn,
 		send:           make(chan []byte, 256),
 		userID:         userID,
+		senderID:       localUser.ID,
 		conversationID: conversationID,
 	}
 
