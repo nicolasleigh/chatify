@@ -94,13 +94,21 @@ func (q *Queries) DeleteFriend(ctx context.Context, id int64) error {
 }
 
 const deleteRequest = `-- name: DeleteRequest :one
-DELETE FROM friend_requests 
-WHERE sender_id = $1
-RETURNING id, sender_id, receiver_id, created_at
+DELETE FROM friend_requests request
+USING users receiver
+WHERE request.id = $1
+  AND request.receiver_id = receiver.id
+  AND receiver.clerk_id = $2
+RETURNING request.id, request.sender_id, request.receiver_id, request.created_at
 `
 
-func (q *Queries) DeleteRequest(ctx context.Context, senderID int64) (FriendRequest, error) {
-	row := q.db.QueryRow(ctx, deleteRequest, senderID)
+type DeleteRequestParams struct {
+	ID      int64  `json:"id"`
+	ClerkID string `json:"clerk_id" validate:"required"`
+}
+
+func (q *Queries) DeleteRequest(ctx context.Context, arg DeleteRequestParams) (FriendRequest, error) {
+	row := q.db.QueryRow(ctx, deleteRequest, arg.ID, arg.ClerkID)
 	var i FriendRequest
 	err := row.Scan(
 		&i.ID,

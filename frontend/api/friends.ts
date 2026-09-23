@@ -25,11 +25,15 @@ export async function createRequest({ email, token }: createRequestParams) {
 
 type denyRequestParams = {
   request_id: number;
+  token: string;
 };
-export async function denyRequest({ request_id }: denyRequestParams) {
+export async function denyRequest({ request_id, token }: denyRequestParams) {
   // When using react-query, be careful in wrapping in try-catch block, if you doing so, onError may not be triggered
   const response = await fetch(`${baseUrl}/deny/${request_id}`, {
     method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
   });
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);

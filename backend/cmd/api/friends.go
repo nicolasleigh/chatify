@@ -76,7 +76,16 @@ func (app *application) denyRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	friend, err := app.query.DeleteRequest(ctx, int64(id))
+	clerkID, err := authenticatedClerkID(ctx)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	friend, err := app.query.DeleteRequest(ctx, store.DeleteRequestParams{
+		ID:      int64(id),
+		ClerkID: clerkID,
+	})
 	if err != nil {
 		badRequestResponse(w, err)
 		return

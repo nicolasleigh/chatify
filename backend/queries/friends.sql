@@ -14,9 +14,12 @@ SELECT
 FROM clerk_users;
 
 -- name: DeleteRequest :one
-DELETE FROM friend_requests 
-WHERE sender_id = $1
-RETURNING *;
+DELETE FROM friend_requests request
+USING users receiver
+WHERE request.id = $1
+  AND request.receiver_id = receiver.id
+  AND receiver.clerk_id = $2
+RETURNING request.id, request.sender_id, request.receiver_id, request.created_at;
 
 -- name: AcceptRequest :exec
 WITH deleted_request AS (

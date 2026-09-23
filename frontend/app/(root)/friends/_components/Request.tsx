@@ -19,7 +19,12 @@ export default function Request({ id, imageUrl, email, username }: Props) {
   const queryClient = useQueryClient();
 
   const { mutate: deny, isPending: denyPending } = useMutation({
-    mutationFn: () => denyRequest({ request_id: id }),
+    mutationFn: () => {
+      if (!token) {
+        throw new Error("Authentication is not ready");
+      }
+      return denyRequest({ request_id: id, token });
+    },
     onSuccess: () => {
       toast.success("Friend request denied");
       queryClient.invalidateQueries({ queryKey: ["friend_requests"] });
