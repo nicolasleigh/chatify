@@ -80,6 +80,10 @@ func main() {
 			)),
 		},
 	}
+	if err := validateConfig(cfg); err != nil {
+		slog.Error("invalid application configuration", "error", err)
+		os.Exit(1)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

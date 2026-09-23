@@ -1,0 +1,34 @@
+package main
+
+import "testing"
+
+func validTestConfig() config {
+	return config{
+		port: 8084,
+		db: dbConfig{
+			dsn:      "postgres://localhost/chatify",
+			maxConns: 10,
+			minConns: 2,
+		},
+		cors:                  cors{trustedOrigins: []string{"http://localhost:3000"}},
+		internalWebhookSecret: "test-secret",
+	}
+}
+
+func TestValidateConfig(t *testing.T) {
+	t.Setenv("CLERK_KEY", "test-clerk-key")
+
+	if err := validateConfig(validTestConfig()); err != nil {
+		t.Fatalf("validateConfig() error = %v", err)
+	}
+}
+
+func TestValidateConfigRequiresWebhookSecret(t *testing.T) {
+	t.Setenv("CLERK_KEY", "test-clerk-key")
+	cfg := validTestConfig()
+	cfg.internalWebhookSecret = ""
+
+	if err := validateConfig(cfg); err == nil {
+		t.Fatal("validateConfig() error = nil, want missing webhook secret error")
+	}
+}
