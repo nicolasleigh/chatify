@@ -21,6 +21,7 @@ type config struct {
 type application struct {
 	config config
 	query  *store.Queries
+	db     databasePinger
 	// store store.Storage
 }
 
@@ -84,6 +85,7 @@ func main() {
 	app := &application{
 		config: cfg,
 		query:  q,
+		db:     db.DB,
 		// store: store,
 	}
 

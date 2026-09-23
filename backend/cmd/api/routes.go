@@ -14,6 +14,8 @@ func (app *application) NewRouter() http.Handler {
 
 	// Health
 	mux.HandleFunc("GET /health", healthCheckHandler)
+	mux.HandleFunc("GET /live", healthCheckHandler)
+	mux.HandleFunc("GET /ready", app.readinessCheckHandler)
 	// User
 	mux.HandleFunc("POST /user", app.createUserHandler)
 	// Friend Request
