@@ -1,8 +1,12 @@
--- name: CreateRequest :exec
+-- name: CreateRequest :one
 WITH clerk_users AS (
     SELECT id 
     FROM users 
     WHERE users.clerk_id = $1
+), receiver AS (
+    SELECT id
+    FROM users
+    WHERE users.email = $2
 )
 INSERT INTO friend_requests (
     sender_id,
@@ -10,8 +14,11 @@ INSERT INTO friend_requests (
 )
 SELECT 
     clerk_users.id,
-    (SELECT id FROM users WHERE users.email = $2)
-FROM clerk_users;
+    receiver.id
+FROM clerk_users
+CROSS JOIN receiver
+WHERE clerk_users.id <> receiver.id
+RETURNING id;
 
 -- name: DeleteRequest :one
 DELETE FROM friend_requests request

@@ -60,11 +60,15 @@ func (q *Queries) AcceptRequest(ctx context.Context, arg AcceptRequestParams) (i
 	return conversation_id, err
 }
 
-const createRequest = `-- name: CreateRequest :exec
+const createRequest = `-- name: CreateRequest :one
 WITH clerk_users AS (
     SELECT id 
     FROM users 
     WHERE users.clerk_id = $1
+), receiver AS (
+    SELECT id
+    FROM users
+    WHERE users.email = $2
 )
 INSERT INTO friend_requests (
     sender_id,
@@ -72,8 +76,11 @@ INSERT INTO friend_requests (
 )
 SELECT 
     clerk_users.id,
-    (SELECT id FROM users WHERE users.email = $2)
+    receiver.id
 FROM clerk_users
+CROSS JOIN receiver
+WHERE clerk_users.id <> receiver.id
+RETURNING id
 `
 
 type CreateRequestParams struct {
@@ -81,9 +88,11 @@ type CreateRequestParams struct {
 	Email   string `json:"email" validate:"required,email,max=255"`
 }
 
-func (q *Queries) CreateRequest(ctx context.Context, arg CreateRequestParams) error {
-	_, err := q.db.Exec(ctx, createRequest, arg.ClerkID, arg.Email)
-	return err
+func (q *Queries) CreateRequest(ctx context.Context, arg CreateRequestParams) (int64, error) {
+	row := q.db.QueryRow(ctx, createRequest, arg.ClerkID, arg.Email)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const deleteFriend = `-- name: DeleteFriend :exec

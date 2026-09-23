@@ -42,8 +42,12 @@ func (app *application) createRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = app.query.CreateRequest(ctx, payload)
+	_, err = app.query.CreateRequest(ctx, payload)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			badRequestResponse(w, errors.New("cannot send a request to this user"))
+			return
+		}
 		if data, ok := err.(*pgconn.PgError); ok && data.Code == "23502" {
 			msg := fmt.Sprintf("Email %s does not exist", payload.Email)
 			err = errors.New(msg)
