@@ -3,6 +3,7 @@
 import { markReadMessage } from "@/api/messages";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import useConversation from "@/hooks/useConversation";
+import { useAuthInfo } from "@/hooks/useAuthInfo";
 import { useMutation } from "@tanstack/react-query";
 import { Dispatch, SetStateAction, useEffect } from "react";
 import CallRoom from "./CallRoom";
@@ -31,6 +32,7 @@ type Props = {
 
 export default function Body({ members, callType, setCallType, currentUserId, msg: messages }: Props) {
   const { conversationId: id } = useConversation();
+  const { token } = useAuthInfo();
   const conversationId = parseInt(id);
 
   const { mutate: markRead } = useMutation({
@@ -41,7 +43,10 @@ export default function Body({ members, callType, setCallType, currentUserId, ms
       conversation_id: number;
       last_seen_message_id: number;
     }) => {
-      return markReadMessage({ conversation_id, last_seen_message_id, member_id: currentUserId });
+      if (!token) {
+        throw new Error("Authentication is not ready");
+      }
+      return markReadMessage({ conversation_id, last_seen_message_id, member_id: currentUserId, token });
     },
   });
 

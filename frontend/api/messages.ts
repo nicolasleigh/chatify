@@ -61,10 +61,20 @@ type markReadMessageParams = {
   last_seen_message_id: number;
   conversation_id: number;
   member_id: number;
+  token: string;
 };
-export async function markReadMessage({ conversation_id, member_id, last_seen_message_id }: markReadMessageParams) {
+export async function markReadMessage({
+  conversation_id,
+  member_id,
+  last_seen_message_id,
+  token,
+}: markReadMessageParams) {
   const response = await fetch(`${baseUrl}/message/mark_read`, {
     method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify({
       conversation_id,
       member_id,
@@ -73,7 +83,7 @@ export async function markReadMessage({ conversation_id, member_id, last_seen_me
   });
 
   if (!response.ok) {
-    throw new Error(`HTTP error: response.status`);
+    throw new Error(`HTTP error: ${response.status}`);
   }
 }
 
