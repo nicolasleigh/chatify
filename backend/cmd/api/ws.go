@@ -188,14 +188,17 @@ func (c *Client) readPump(hub *Hub, app *application) {
 		// type: "text"
 
 		// Store message in database
-		payload := store.CreateMessageParams{
+		payload := store.CreateMessageWithOutboxParams{
 			Content:  msg.Content,
 			ID:       msg.ConversationID,
 			SenderID: c.senderID,
 			Type:     msg.Type,
 		}
 
-		messageId, err := app.query.CreateMessage(c.ctx, payload)
+		// Keep WebSocket writes on the same transactional outbox path as the
+		// HTTP API. The live chat response remains synchronous, while the
+		// RabbitMQ event is delivered asynchronously by the outbox worker.
+		messageId, err := app.query.CreateMessageWithOutbox(c.ctx, payload)
 		if err != nil {
 			log.Printf("Error storing message: %v", err)
 			continue

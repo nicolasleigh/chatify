@@ -23,7 +23,7 @@ func (app *application) createMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var payload store.CreateMessageParams
+	var payload store.CreateMessageWithOutboxParams
 	var body struct {
 		SenderID       int64   `json:"sender_id"`
 		ConversationID int64   `json:"conversation_id"`
@@ -54,7 +54,10 @@ func (app *application) createMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = app.query.CreateMessage(ctx, payload)
+	// The message, conversation preview, and outbox event are committed by one
+	// database statement. RabbitMQ can therefore be unavailable here without
+	// causing a successful user action to lose its integration event.
+	_, err = app.query.CreateMessageWithOutbox(ctx, payload)
 	if err != nil {
 		badRequestResponse(w, err)
 		return
