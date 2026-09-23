@@ -43,10 +43,10 @@ type Client struct {
 	closed                bool
 }
 
-// New connects to RabbitMQ and declares the durable exchange used for
-// application events. Startup fails if either operation fails, because
-// silently accepting events without a broker would leave the service looking
-// healthy while its asynchronous integration is disabled.
+// New validates the RabbitMQ settings and creates a lazy publisher. The actual
+// connection is opened on the first Publish call, so a broker outage does not
+// prevent the core chat HTTP/WebSocket service from starting. The Outbox keeps
+// the event durable until a later publish attempt succeeds.
 func New(cfg Config) (*Client, error) {
 	if strings.TrimSpace(cfg.URL) == "" {
 		return nil, errors.New("rabbitmq URL is required")
@@ -62,12 +62,6 @@ func New(cfg Config) (*Client, error) {
 		url:                   cfg.URL,
 		eventsExchange:        cfg.EventsExchange,
 		publishConfirmTimeout: cfg.PublishConfirmTimeout,
-	}
-	client.mu.Lock()
-	err := client.connectLocked()
-	client.mu.Unlock()
-	if err != nil {
-		return nil, err
 	}
 	return client, nil
 }
@@ -226,8 +220,14 @@ func (c *Client) Close() error {
 	}
 	c.closed = true
 
-	channelErr := c.channel.Close()
-	connectionErr := c.connection.Close()
+	var channelErr error
+	if c.channel != nil {
+		channelErr = c.channel.Close()
+	}
+	var connectionErr error
+	if c.connection != nil {
+		connectionErr = c.connection.Close()
+	}
 	if errors.Is(channelErr, amqp.ErrClosed) {
 		channelErr = nil
 	}

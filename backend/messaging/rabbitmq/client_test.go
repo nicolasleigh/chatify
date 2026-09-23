@@ -15,3 +15,16 @@ func TestNewRejectsMissingExchangeBeforeDialing(t *testing.T) {
 		t.Fatal("New() error = nil, want missing exchange validation error")
 	}
 }
+
+func TestNewDoesNotRequireBrokerAtConstruction(t *testing.T) {
+	client, err := New(Config{
+		URL:            "amqp://guest:guest@127.0.0.1:1/",
+		EventsExchange: "chatify.events",
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v, want lazy construction without a broker", err)
+	}
+	if err := client.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
