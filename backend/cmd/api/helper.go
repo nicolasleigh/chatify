@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 
 	"github.com/clerk/clerk-sdk-go/v2"
@@ -24,7 +25,19 @@ func readJSON(w http.ResponseWriter, r *http.Request, ptr any) error {
 
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
-	return dec.Decode(ptr)
+	if err := dec.Decode(ptr); err != nil {
+		return err
+	}
+
+	var trailing any
+	if err := dec.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return errors.New("request body must contain a single JSON value")
+		}
+		return err
+	}
+
+	return nil
 }
 
 func getClerkUser(ctx context.Context) (*clerk.User, error) {

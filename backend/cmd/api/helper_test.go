@@ -26,3 +26,15 @@ func TestReadJSONEnforcesBodyLimit(t *testing.T) {
 		t.Fatalf("expected http.MaxBytesError, got %T: %v", err, err)
 	}
 }
+
+func TestReadJSONRejectsTrailingJSON(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"content":"hello"}{"content":"world"}`))
+	recorder := httptest.NewRecorder()
+
+	var body struct {
+		Content string `json:"content"`
+	}
+	if err := readJSON(recorder, req, &body); err == nil {
+		t.Fatal("expected trailing JSON to be rejected")
+	}
+}
