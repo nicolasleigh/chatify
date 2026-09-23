@@ -8,12 +8,15 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/nicolasleigh/chat-app/env"
 	"github.com/nicolasleigh/chat-app/messaging/rabbitmq"
+	chatnotifications "github.com/nicolasleigh/chat-app/notifications"
+	webpushnotifications "github.com/nicolasleigh/chat-app/notifications/webpush"
 	"github.com/nicolasleigh/chat-app/outbox"
 	"github.com/nicolasleigh/chat-app/pg"
 	"github.com/nicolasleigh/chat-app/store"
@@ -151,6 +154,13 @@ func main() {
 	}
 
 	q := store.New(db.DB)
+	app := &application{
+		config:   cfg,
+		query:    q,
+		db:       db.DB,
+		presence: newMemoryPresence(),
+		// store: store,
+	}
 
 	slog.Info("database connection pool established!")
 
@@ -189,12 +199,67 @@ func main() {
 		}
 	}()
 
-	app := &application{
-		config: cfg,
-		query:  q,
-		db:     db.DB,
-		// store: store,
+	var stopNotifications = func() {}
+	var notificationDone sync.WaitGroup
+	if cfg.notification.enabled {
+		provider, err := webpushnotifications.New(webpushnotifications.Config{
+			VAPIDPublicKey:  cfg.notification.vapidPublicKey,
+			VAPIDPrivateKey: cfg.notification.vapidPrivateKey,
+			Subject:         cfg.notification.vapidSubject,
+		})
+		if err != nil {
+			_ = publisher.Close()
+			slog.Error("web push provider initialization failed", "error", err)
+			os.Exit(1)
+		}
+
+		planner, err := chatnotifications.NewConsumer(q, app.presence)
+		if err != nil {
+			_ = publisher.Close()
+			slog.Error("notification consumer initialization failed", "error", err)
+			os.Exit(1)
+		}
+		deliveryWorker, err := chatnotifications.NewDeliveryWorker(q, provider, chatnotifications.DeliveryWorkerConfig{
+			PollInterval: cfg.notification.pollInterval,
+			BatchSize:    cfg.notification.batchSize,
+			MaxAttempts:  cfg.notification.maxAttempts,
+			Logger:       NewLog,
+		})
+		if err != nil {
+			_ = publisher.Close()
+			slog.Error("notification delivery worker initialization failed", "error", err)
+			os.Exit(1)
+		}
+		notificationConsumer, err := rabbitmq.NewConsumer(rabbitmq.ConsumerConfig{
+			URL:         cfg.rabbitmq.url,
+			Exchange:    cfg.rabbitmq.exchange,
+			Queue:       cfg.notification.queue,
+			ConsumerTag: "chatify-notifications",
+		})
+		if err != nil {
+			_ = publisher.Close()
+			slog.Error("notification rabbitmq consumer initialization failed", "error", err)
+			os.Exit(1)
+		}
+
+		notificationCtx, cancelNotifications := context.WithCancel(context.Background())
+		stopNotifications = cancelNotifications
+		notificationDone.Add(2)
+		go func() {
+			defer notificationDone.Done()
+			deliveryWorker.Run(notificationCtx)
+		}()
+		go func() {
+			defer notificationDone.Done()
+			runNotificationConsumer(notificationCtx, notificationConsumer, planner.Handle)
+		}()
 	}
+	defer func() {
+		// Stop the notification consumer and delivery loop before the shared
+		// RabbitMQ publisher is closed by the earlier shutdown defer.
+		stopNotifications()
+		notificationDone.Wait()
+	}()
 
 	srv := app.NewServer()
 	serverErr := make(chan error, 1)
