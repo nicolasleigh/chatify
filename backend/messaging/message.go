@@ -94,3 +94,33 @@ type Publisher interface {
 	Publish(ctx context.Context, envelope Envelope) error
 	Close() error
 }
+
+// PermanentError marks an event that cannot become valid by retrying, such as
+// malformed JSON or an unsupported schema version. Queue consumers should ACK
+// these messages after recording the error instead of requeueing forever.
+type PermanentError struct {
+	Err error
+}
+
+func (e *PermanentError) Error() string {
+	if e == nil || e.Err == nil {
+		return "permanent messaging error"
+	}
+	return e.Err.Error()
+}
+
+func (e *PermanentError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
+
+func NewPermanentError(err error) error {
+	return &PermanentError{Err: err}
+}
+
+func IsPermanentError(err error) bool {
+	var permanentErr *PermanentError
+	return errors.As(err, &permanentErr)
+}

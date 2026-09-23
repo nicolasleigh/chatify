@@ -62,22 +62,22 @@ type messageCreatedPayload struct {
 // safely record the intent.
 func (c *Consumer) Handle(ctx context.Context, envelope messaging.Envelope) error {
 	if err := envelope.Validate(); err != nil {
-		return fmt.Errorf("validate notification event: %w", err)
+		return messaging.NewPermanentError(fmt.Errorf("validate notification event: %w", err))
 	}
 	if envelope.Type != messaging.MessageCreated {
-		return fmt.Errorf("unsupported notification event type %q", envelope.Type)
+		return messaging.NewPermanentError(fmt.Errorf("unsupported notification event type %q", envelope.Type))
 	}
 	eventID, err := strconv.ParseInt(envelope.ID, 10, 64)
 	if err != nil || eventID <= 0 {
-		return errors.New("notification event ID must be a positive database ID")
+		return messaging.NewPermanentError(errors.New("notification event ID must be a positive database ID"))
 	}
 
 	var payload messageCreatedPayload
 	if err := json.Unmarshal(envelope.Payload, &payload); err != nil {
-		return fmt.Errorf("decode message.created payload: %w", err)
+		return messaging.NewPermanentError(fmt.Errorf("decode message.created payload: %w", err))
 	}
 	if payload.MessageID <= 0 || payload.ConversationID <= 0 || payload.SenderID <= 0 {
-		return errors.New("message.created payload has invalid IDs")
+		return messaging.NewPermanentError(errors.New("message.created payload has invalid IDs"))
 	}
 
 	recipients, err := c.repository.GetConversationNotificationRecipients(ctx, store.GetConversationNotificationRecipientsParams{

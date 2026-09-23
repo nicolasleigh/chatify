@@ -1,6 +1,7 @@
 package messaging
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -21,6 +22,17 @@ func TestNewEnvelope(t *testing.T) {
 	}
 	if err := envelope.Validate(); err != nil {
 		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestPermanentErrorPreservesCause(t *testing.T) {
+	rootErr := errors.New("invalid event")
+	err := NewPermanentError(rootErr)
+	if !IsPermanentError(err) {
+		t.Fatal("IsPermanentError() = false, want true")
+	}
+	if !errors.Is(err, rootErr) {
+		t.Fatal("PermanentError should unwrap its cause")
 	}
 }
 
