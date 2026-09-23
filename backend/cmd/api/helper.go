@@ -10,6 +10,8 @@ import (
 	"github.com/clerk/clerk-sdk-go/v2/user"
 )
 
+const maxJSONBodyBytes = 1_048_576
+
 func writeJSON(w http.ResponseWriter, status int, data any) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -18,8 +20,7 @@ func writeJSON(w http.ResponseWriter, status int, data any) error {
 }
 
 func readJSON(w http.ResponseWriter, r *http.Request, ptr any) error {
-	maxBytes := 1_048_576 // 1024*1024 -> 1MB
-	r.Body = http.MaxBytesReader(w, r.Body, int64(maxBytes))
+	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
 
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
