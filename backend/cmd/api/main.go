@@ -2,8 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -96,9 +100,25 @@ func main() {
 	}
 
 	srv := app.NewServer()
-	err = srv.ListenAndServe()
-	if err != nil {
-		slog.Error(err.Error())
-		os.Exit(1)
+	serverErr := make(chan error, 1)
+	go func() {
+		serverErr <- srv.ListenAndServe()
+	}()
+
+	shutdownSignal, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	select {
+	case err = <-serverErr:
+		if !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("http server stopped unexpectedly", "error", err)
+		}
+	case <-shutdownSignal.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			slog.Error("http server graceful shutdown failed", "error", err)
+		}
 	}
 }
