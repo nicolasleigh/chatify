@@ -28,7 +28,7 @@ func (app *application) NewRouter() http.Handler {
 	// Message
 	mux.Handle("POST /message", requireAuth(http.HandlerFunc(app.createMessage)))
 	mux.Handle("GET /messages/{conversation_id}", requireAuth(http.HandlerFunc(app.getMessages)))
-	mux.HandleFunc("POST /message/mark_read", app.markReadMessage)
+	mux.Handle("POST /message/mark_read", requireAuth(http.HandlerFunc(app.markReadMessage)))
 	mux.Handle("GET /message/{message_id}", requireAuth(http.HandlerFunc(app.getConversationLastMessage)))
 	mux.Handle("GET /message/unseen/{clerk_id}", requireAuth(http.HandlerFunc(app.getAllUnseenMessageCount)))
 	// Conversation

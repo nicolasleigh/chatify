@@ -103,12 +103,34 @@ func (app *application) getMessages(w http.ResponseWriter, r *http.Request) {
 func (app *application) markReadMessage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var payload store.MarkReadMessageParams
+	clerkID, err := authenticatedClerkID(ctx)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-	err := readJSON(w, r, &payload)
+	err = readJSON(w, r, &payload)
 	if err != nil {
 		badRequestResponse(w, err)
 		return
 	}
+
+	localUser, err := app.query.GetUser(ctx, clerkID)
+	if err != nil {
+		serverErrorResponse(w, err)
+		return
+	}
+
+	hasAccess, err := app.hasAccessToConversation(ctx, localUser.ID, payload.ConversationID)
+	if err != nil {
+		serverErrorResponse(w, err)
+		return
+	}
+	if !hasAccess {
+		forbiddenResponse(w, errors.New("conversation access denied"))
+		return
+	}
+	payload.MemberID = localUser.ID
 
 	err = app.query.MarkReadMessage(ctx, payload)
 	if err != nil {
