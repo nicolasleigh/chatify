@@ -2,7 +2,7 @@
 
 import ItemList from "@/components/shared/item-list/ItemList";
 import { getAllConversations } from "@/api/conversations";
-import { useAuth } from "@clerk/nextjs";
+import { useAuthInfo } from "@/hooks/useAuthInfo";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { ReactNode } from "react";
@@ -11,21 +11,17 @@ import DMConversationItem from "./_components/DMConversationItem";
 import GroupConversationItem from "./_components/GroupConversationItem";
 
 export default function ConversationsLayout({ children }: { children: ReactNode }) {
-  const { userId: clerk_id } = useAuth();
-  // const getAuthToken = async () => {
-  //   const token = await getToken();
-  //   console.log("token", token);
-  // };
-  // getAuthToken();
+  const { userId: clerk_id, token } = useAuthInfo();
 
   const { data: conversations } = useQuery({
     queryKey: ["conversations"],
     queryFn: () => {
-      if (!clerk_id) {
-        throw new Error("User ID not found");
+      if (!clerk_id || !token) {
+        throw new Error("Authentication is not ready");
       }
-      return getAllConversations({ clerk_id });
+      return getAllConversations({ clerk_id, token });
     },
+    enabled: Boolean(clerk_id && token),
   });
   return (
     <>

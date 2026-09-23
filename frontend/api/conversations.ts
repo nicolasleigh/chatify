@@ -4,6 +4,7 @@ import { baseUrl } from "./utils";
 type getConversationParams = {
   clerk_id: string;
   conversation_id: number;
+  token: string;
 };
 const conversationSchema = z.array(
   z.object({
@@ -23,8 +24,14 @@ const conversationSchema = z.array(
 export async function getConversation({
   clerk_id,
   conversation_id,
+  token,
 }: getConversationParams): Promise<z.infer<typeof conversationSchema>> {
-  const response = await fetch(`${baseUrl}/conversation/${clerk_id}/${conversation_id}`, { method: "GET" });
+  const response = await fetch(`${baseUrl}/conversation/${clerk_id}/${conversation_id}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
   if (!response.ok) {
     throw new Error(`HTTP error: ${response.status}`);
   }
@@ -38,12 +45,19 @@ export async function getConversation({
 
 type getAllConversationsParams = {
   clerk_id: string;
+  token: string;
 };
 const allConversationsSchema = z.array(conversationSchema);
 export async function getAllConversations({
   clerk_id,
+  token,
 }: getAllConversationsParams): Promise<z.infer<typeof allConversationsSchema>> {
-  const response = await fetch(`${baseUrl}/conversations/${clerk_id}`, { method: "GET" });
+  const response = await fetch(`${baseUrl}/conversations/${clerk_id}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
   if (!response.ok) {
     throw new Error(`HTTP error: ${response.status}`);
   }

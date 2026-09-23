@@ -30,8 +30,12 @@ export default function ConversationPage({ params }: Props) {
       if (!clerk_id) {
         throw new Error("Clerk user not found");
       }
-      return getConversation({ conversation_id: conversationId, clerk_id });
+      if (!token) {
+        throw new Error("Authentication is not ready");
+      }
+      return getConversation({ conversation_id: conversationId, clerk_id, token });
     },
+    enabled: Boolean(clerk_id && token),
   });
 
   // const { addMessage, isAddMessagePending, isLoading, isReady, messages: storeMessages } = useMessagesStore({ userId });
