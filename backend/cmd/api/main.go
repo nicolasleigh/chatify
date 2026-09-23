@@ -30,9 +30,12 @@ type application struct {
 }
 
 type dbConfig struct {
-	dsn      string
-	maxConns int32
-	minConns int32
+	dsn               string
+	maxConns          int32
+	minConns          int32
+	maxConnLifetime   time.Duration
+	maxConnIdleTime   time.Duration
+	healthCheckPeriod time.Duration
 }
 
 type cors struct {
@@ -60,9 +63,12 @@ func main() {
 	cfg := config{
 		port: env.GetInt("PORT", 8084),
 		db: dbConfig{
-			dsn:      dsnEnv,
-			maxConns: int32(env.GetInt("DB_MAX_CONNS", 10)),
-			minConns: int32(env.GetInt("DB_MIN_CONNS", 2)),
+			dsn:               dsnEnv,
+			maxConns:          int32(env.GetInt("DB_MAX_CONNS", 10)),
+			minConns:          int32(env.GetInt("DB_MIN_CONNS", 2)),
+			maxConnLifetime:   time.Duration(env.GetInt("DB_MAX_CONN_LIFETIME_SECONDS", 1800)) * time.Second,
+			maxConnIdleTime:   time.Duration(env.GetInt("DB_MAX_CONN_IDLE_TIME_SECONDS", 300)) * time.Second,
+			healthCheckPeriod: time.Duration(env.GetInt("DB_HEALTH_CHECK_PERIOD_SECONDS", 60)) * time.Second,
 		},
 		cors: cors{
 			trustedOrigins: []string{"http://localhost:3000", "https://chat.linze.pro"},
@@ -73,8 +79,11 @@ func main() {
 	defer cancel()
 
 	db, err := pg.NewPG(ctx, cfg.db.dsn, pg.PoolConfig{
-		MaxConns: cfg.db.maxConns,
-		MinConns: cfg.db.minConns,
+		MaxConns:          cfg.db.maxConns,
+		MinConns:          cfg.db.minConns,
+		MaxConnLifetime:   cfg.db.maxConnLifetime,
+		MaxConnIdleTime:   cfg.db.maxConnIdleTime,
+		HealthCheckPeriod: cfg.db.healthCheckPeriod,
 	})
 	if err != nil {
 		slog.Error("database connection pool initialization failed", "error", err)
