@@ -67,29 +67,52 @@ SELECT EXISTS (
       AND conversation_id = $2
 ) AS is_member;
 
--- name: CreateGroup :exec
+-- name: CreateGroup :one
 WITH 
     clerk_users AS (
         SELECT id 
         FROM users 
         WHERE clerk_id = $1
+    ), requested_members AS (
+        SELECT DISTINCT member_id
+        FROM unnest($3::bigint[]) AS member_id
+    ), valid_members AS (
+        SELECT requested.member_id
+        FROM requested_members requested
+        WHERE requested.member_id IN (SELECT id FROM clerk_users)
+           OR EXISTS (
+               SELECT 1
+               FROM friends
+               WHERE (
+                   friends.user_a_id = (SELECT id FROM clerk_users)
+                   AND friends.user_b_id = requested.member_id
+               ) OR (
+                   friends.user_b_id = (SELECT id FROM clerk_users)
+                   AND friends.user_a_id = requested.member_id
+               )
+           )
     ),
     conv AS (
         INSERT INTO conversations (
             name, is_group, group_owner
-        ) VALUES (
-            $2, true, (SELECT id FROM clerk_users)
         )
+        SELECT $2, true, (SELECT id FROM clerk_users)
+        WHERE (SELECT COUNT(*) FROM valid_members) = (SELECT COUNT(*) FROM requested_members)
         RETURNING id
+    ), member_insert AS (
+        INSERT INTO conversation_members (
+            conversation_id, member_id
+        )
+        SELECT conv.id, valid_members.member_id
+        FROM conv, valid_members
+        UNION
+        SELECT conv.id, clerk_users.id
+        FROM conv, clerk_users
+        RETURNING conversation_id
     )
-INSERT INTO conversation_members (
-    conversation_id, member_id
-) 
-SELECT conv.id, member_id
-FROM conv, unnest($3::bigint[]) as member_id
-UNION
-SELECT conv.id, clerk_users.id
-FROM conv, clerk_users;
+SELECT conversation_id
+FROM member_insert
+LIMIT 1;
 
 -- name: LeaveGroup :exec
 WITH clerk_users AS (

@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/nicolasleigh/chat-app/store"
 )
 
@@ -107,8 +108,12 @@ func (app *application) createGroup(w http.ResponseWriter, r *http.Request) {
 	payload.Column3 = body.Member_id_arr
 	payload.ClerkID = clerkID
 
-	err = app.query.CreateGroup(ctx, payload)
+	_, err = app.query.CreateGroup(ctx, payload)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			badRequestResponse(w, errors.New("group members must be friends"))
+			return
+		}
 		badRequestResponse(w, err)
 		return
 	}
