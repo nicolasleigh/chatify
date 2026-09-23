@@ -4,6 +4,10 @@ INSERT INTO users (
 ) VALUES (
   $1, $2, $3, $4
 )
+ON CONFLICT (clerk_id) DO UPDATE SET
+  username = EXCLUDED.username,
+  email = EXCLUDED.email,
+  image_url = EXCLUDED.image_url
 RETURNING *;
 
 

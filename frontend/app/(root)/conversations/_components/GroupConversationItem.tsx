@@ -2,6 +2,7 @@ import { getConversationLastMessage } from "@/api/messages";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { useAuthInfo } from "@/hooks/useAuthInfo";
 import useGetUnseenCount from "@/hooks/useGetUnseenCount";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
@@ -15,6 +16,7 @@ type Props = {
 };
 
 export default function GroupConversationItem({ id, name, lastMessageId: message_id, clerkId }: Props) {
+  const { token } = useAuthInfo();
   const unseenCnt = useGetUnseenCount();
   const cnt = unseenCnt?.find((item) => item.conversation_id === id);
   const unseenCount = cnt ? cnt.unseen_message_count : 0;
@@ -22,10 +24,14 @@ export default function GroupConversationItem({ id, name, lastMessageId: message
     queryKey: ["lastMessage", message_id],
     queryFn: () => {
       if (message_id) {
-        return getConversationLastMessage({ message_id });
+        if (!token) {
+          throw new Error("Authentication is not ready");
+        }
+        return getConversationLastMessage({ message_id, token });
       }
       return null;
     },
+    enabled: Boolean(message_id && token),
   });
   return (
     <Link href={`/conversations/${id}?clerk_id=${clerkId}`} className='w-full'>

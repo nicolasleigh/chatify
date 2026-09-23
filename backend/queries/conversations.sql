@@ -42,7 +42,13 @@ FROM conversation_members member
 JOIN conv ON conv.id = member.conversation_id
 JOIN users ON users.id = member.member_id
 WHERE member.member_id != (SELECT id FROM clerk_users)
-  AND member.conversation_id = $2;
+  AND member.conversation_id = $2
+  AND EXISTS (
+      SELECT 1
+      FROM conversation_members viewer
+      WHERE viewer.member_id = (SELECT id FROM clerk_users)
+        AND viewer.conversation_id = $2
+  );
 
 -- name: GetConversationsByClerkId :many
 WITH clerk_users AS (
@@ -53,39 +59,75 @@ WITH clerk_users AS (
 SELECT member.conversation_id FROM conversation_members member
 JOIN clerk_users ON clerk_users.id = member.member_id;
 
--- name: CreateGroup :exec
+-- name: IsConversationMember :one
+SELECT EXISTS (
+    SELECT 1
+    FROM conversation_members
+    WHERE member_id = $1
+      AND conversation_id = $2
+) AS is_member;
+
+-- name: CreateGroup :one
 WITH 
     clerk_users AS (
         SELECT id 
         FROM users 
         WHERE clerk_id = $1
+    ), requested_members AS (
+        SELECT DISTINCT member_id
+        FROM unnest($3::bigint[]) AS member_id
+    ), valid_members AS (
+        SELECT requested.member_id
+        FROM requested_members requested
+        WHERE requested.member_id IN (SELECT id FROM clerk_users)
+           OR EXISTS (
+               SELECT 1
+               FROM friends
+               WHERE (
+                   friends.user_a_id = (SELECT id FROM clerk_users)
+                   AND friends.user_b_id = requested.member_id
+               ) OR (
+                   friends.user_b_id = (SELECT id FROM clerk_users)
+                   AND friends.user_a_id = requested.member_id
+               )
+           )
     ),
     conv AS (
         INSERT INTO conversations (
             name, is_group, group_owner
-        ) VALUES (
-            $2, true, (SELECT id FROM clerk_users)
         )
+        SELECT $2, true, (SELECT id FROM clerk_users)
+        WHERE (SELECT COUNT(*) FROM valid_members) = (SELECT COUNT(*) FROM requested_members)
         RETURNING id
+    ), member_insert AS (
+        INSERT INTO conversation_members (
+            conversation_id, member_id
+        )
+        SELECT conv.id, valid_members.member_id
+        FROM conv, valid_members
+        UNION
+        SELECT conv.id, clerk_users.id
+        FROM conv, clerk_users
+        RETURNING conversation_id
     )
-INSERT INTO conversation_members (
-    conversation_id, member_id
-) 
-SELECT conv.id, member_id
-FROM conv, unnest($3::bigint[]) as member_id
-UNION
-SELECT conv.id, clerk_users.id
-FROM conv, clerk_users;
+SELECT conversation_id
+FROM member_insert
+LIMIT 1;
 
 -- name: LeaveGroup :exec
 WITH clerk_users AS (
     SELECT id 
     FROM users 
     WHERE users.clerk_id = $1
+), target_group AS (
+    SELECT id
+    FROM conversations
+    WHERE conversations.id = $2
+      AND conversations.is_group = true
 )
 DELETE FROM conversation_members 
 WHERE conversation_members.member_id IN (SELECT id FROM clerk_users)
-AND conversation_members.conversation_id = $2;
+AND conversation_members.conversation_id IN (SELECT id FROM target_group);
 
 -- name: DeleteGroup :exec
 WITH clerk_users AS (
@@ -94,5 +136,6 @@ WITH clerk_users AS (
     WHERE users.clerk_id = $1
 )
 DELETE FROM conversations 
-WHERE group_owner IN (SELECT id FROM clerk_users)
+WHERE conversations.is_group = true
+AND group_owner IN (SELECT id FROM clerk_users)
 AND conversations.id = $2;

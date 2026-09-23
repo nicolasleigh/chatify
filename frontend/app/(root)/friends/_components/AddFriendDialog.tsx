@@ -14,6 +14,7 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useAuthInfo } from "@/hooks/useAuthInfo";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { UserPlus } from "lucide-react";
@@ -25,9 +26,15 @@ const addFriendFormSchema = z.object({
   email: z.string().min(1, { message: "This field can't be empty" }).email("Please enter a valid email"),
 });
 
-export default function AddFriendDialog({ clerkId }: { clerkId: string }) {
+export default function AddFriendDialog() {
+  const { token } = useAuthInfo();
   const { mutate: createReq, isPending } = useMutation({
-    mutationFn: (email: string) => createRequest({ email, clerkId }),
+    mutationFn: (email: string) => {
+      if (!token) {
+        throw new Error("Authentication is not ready");
+      }
+      return createRequest({ email, token });
+    },
     onSuccess: () => {
       toast.success("Friend request sent!");
     },

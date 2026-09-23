@@ -102,8 +102,16 @@ const getConversationLastMessage = `-- name: GetConversationLastMessage :one
 SELECT sender_id, users.username as sender_username, users.image_url as sender_image_url, content, type 
 FROM messages
 JOIN users ON users.id = sender_id
+JOIN conversation_members ON conversation_members.conversation_id = messages.conversation_id
+JOIN users viewer ON viewer.id = conversation_members.member_id
 WHERE messages.id = $1
+  AND viewer.clerk_id = $2
 `
+
+type GetConversationLastMessageParams struct {
+	ID      int64  `json:"id"`
+	ClerkID string `json:"clerk_id" validate:"required"`
+}
 
 type GetConversationLastMessageRow struct {
 	SenderID       int64   `json:"sender_id"`
@@ -113,8 +121,8 @@ type GetConversationLastMessageRow struct {
 	Type           *string `json:"type"`
 }
 
-func (q *Queries) GetConversationLastMessage(ctx context.Context, id int64) (GetConversationLastMessageRow, error) {
-	row := q.db.QueryRow(ctx, getConversationLastMessage, id)
+func (q *Queries) GetConversationLastMessage(ctx context.Context, arg GetConversationLastMessageParams) (GetConversationLastMessageRow, error) {
+	row := q.db.QueryRow(ctx, getConversationLastMessage, arg.ID, arg.ClerkID)
 	var i GetConversationLastMessageRow
 	err := row.Scan(
 		&i.SenderID,
@@ -166,7 +174,13 @@ SELECT u.id as user_id, u.username, u.image_url, u.email, m.id as message_id, m.
 JOIN users u ON u.id = m.sender_id
 WHERE conversation_id = $1
 ORDER BY m.created_at DESC
+LIMIT $2
 `
+
+type GetMessagesParams struct {
+	ConversationID int64 `json:"conversation_id"`
+	Limit          int32 `json:"limit"`
+}
 
 type GetMessagesRow struct {
 	UserID         int64              `json:"user_id"`
@@ -180,8 +194,8 @@ type GetMessagesRow struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
-func (q *Queries) GetMessages(ctx context.Context, conversationID int64) ([]GetMessagesRow, error) {
-	rows, err := q.db.Query(ctx, getMessages, conversationID)
+func (q *Queries) GetMessages(ctx context.Context, arg GetMessagesParams) ([]GetMessagesRow, error) {
+	rows, err := q.db.Query(ctx, getMessages, arg.ConversationID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -211,9 +225,18 @@ func (q *Queries) GetMessages(ctx context.Context, conversationID int64) ([]GetM
 }
 
 const markReadMessage = `-- name: MarkReadMessage :exec
-UPDATE conversation_members 
+UPDATE conversation_members AS member
 SET last_seen_message_id = $3
-WHERE conversation_id = $1 AND member_id = $2
+WHERE member.conversation_id = $1
+  AND member.member_id = $2
+  AND $3 IS NOT NULL
+  AND $3 > COALESCE(member.last_seen_message_id, 0)
+  AND EXISTS (
+    SELECT 1
+    FROM messages
+    WHERE messages.id = $3
+      AND messages.conversation_id = $1
+  )
 `
 
 type MarkReadMessageParams struct {

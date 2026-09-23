@@ -9,45 +9,66 @@ import (
 	"context"
 )
 
-const acceptRequest = `-- name: AcceptRequest :exec
-WITH new_conversation AS (
-  -- First, create the conversation
+const acceptRequest = `-- name: AcceptRequest :one
+WITH deleted_request AS (
+  DELETE FROM friend_requests request
+  USING users receiver
+  WHERE request.id = $1
+    AND request.receiver_id = receiver.id
+    AND receiver.clerk_id = $2
+  RETURNING request.sender_id, request.receiver_id
+),
+new_conversation AS (
   INSERT INTO conversations (is_group)
-  VALUES (false)
+  SELECT false
+  FROM deleted_request
   RETURNING id AS conversation_id
 ),
 friend_insert AS (
-  -- Insert friendship with ordered user IDs
   INSERT INTO friends (user_a_id, user_b_id, conversation_id)
   SELECT 
-    LEAST($1::bigint, $2::bigint),  -- Ensure user_a_id < user_b_id
-    GREATEST($1::bigint, $2::bigint),
-    conversation_id
-  FROM new_conversation
+    LEAST(request.sender_id, request.receiver_id),
+    GREATEST(request.sender_id, request.receiver_id),
+    conversation.conversation_id
+  FROM deleted_request request
+  CROSS JOIN new_conversation conversation
+  RETURNING user_a_id, user_b_id, conversation_id
+),
+member_insert AS (
+  INSERT INTO conversation_members (member_id, conversation_id)
+  SELECT member_id, conversation_id
+  FROM friend_insert
+  CROSS JOIN LATERAL (
+    VALUES (friend_insert.user_a_id), (friend_insert.user_b_id)
+  ) AS members(member_id)
   RETURNING conversation_id
 )
-INSERT INTO conversation_members (member_id, conversation_id)
-SELECT user_id, conversation_id
-FROM friend_insert
-CROSS JOIN (VALUES (LEAST($1::bigint, $2::bigint)), (GREATEST($1::bigint, $2::bigint))) AS users(user_id)
+SELECT conversation_id
+FROM member_insert
+LIMIT 1
 `
 
 type AcceptRequestParams struct {
-	Column1 int64 `json:"column_1"`
-	Column2 int64 `json:"column_2"`
+	ID      int64  `json:"id"`
+	ClerkID string `json:"clerk_id" validate:"required"`
 }
 
-// Insert both users into conversation_members
-func (q *Queries) AcceptRequest(ctx context.Context, arg AcceptRequestParams) error {
-	_, err := q.db.Exec(ctx, acceptRequest, arg.Column1, arg.Column2)
-	return err
+func (q *Queries) AcceptRequest(ctx context.Context, arg AcceptRequestParams) (int64, error) {
+	row := q.db.QueryRow(ctx, acceptRequest, arg.ID, arg.ClerkID)
+	var conversation_id int64
+	err := row.Scan(&conversation_id)
+	return conversation_id, err
 }
 
-const createRequest = `-- name: CreateRequest :exec
+const createRequest = `-- name: CreateRequest :one
 WITH clerk_users AS (
     SELECT id 
     FROM users 
     WHERE users.clerk_id = $1
+), receiver AS (
+    SELECT id
+    FROM users
+    WHERE users.email = $2
 )
 INSERT INTO friend_requests (
     sender_id,
@@ -55,8 +76,11 @@ INSERT INTO friend_requests (
 )
 SELECT 
     clerk_users.id,
-    (SELECT id FROM users WHERE users.email = $2)
+    receiver.id
 FROM clerk_users
+CROSS JOIN receiver
+WHERE clerk_users.id <> receiver.id
+RETURNING id
 `
 
 type CreateRequestParams struct {
@@ -64,34 +88,57 @@ type CreateRequestParams struct {
 	Email   string `json:"email" validate:"required,email,max=255"`
 }
 
-func (q *Queries) CreateRequest(ctx context.Context, arg CreateRequestParams) error {
-	_, err := q.db.Exec(ctx, createRequest, arg.ClerkID, arg.Email)
-	return err
+func (q *Queries) CreateRequest(ctx context.Context, arg CreateRequestParams) (int64, error) {
+	row := q.db.QueryRow(ctx, createRequest, arg.ClerkID, arg.Email)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const deleteFriend = `-- name: DeleteFriend :exec
-WITH deleted_friends AS (
+WITH clerk_user AS (
+    SELECT id
+    FROM users
+    WHERE clerk_id = $2
+), deleted_friend AS (
     DELETE FROM friends
     WHERE conversation_id = $1
-    RETURNING id, user_a_id, user_b_id, created_at, conversation_id
+      AND (
+          user_a_id = (SELECT id FROM clerk_user)
+          OR user_b_id = (SELECT id FROM clerk_user)
+      )
+    RETURNING conversation_id
 )
 DELETE FROM conversations
-WHERE conversations.id = $1
+WHERE conversations.id IN (SELECT conversation_id FROM deleted_friend)
 `
 
-func (q *Queries) DeleteFriend(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deleteFriend, id)
+type DeleteFriendParams struct {
+	ConversationID *int64 `json:"conversation_id"`
+	ClerkID        string `json:"clerk_id" validate:"required"`
+}
+
+func (q *Queries) DeleteFriend(ctx context.Context, arg DeleteFriendParams) error {
+	_, err := q.db.Exec(ctx, deleteFriend, arg.ConversationID, arg.ClerkID)
 	return err
 }
 
 const deleteRequest = `-- name: DeleteRequest :one
-DELETE FROM friend_requests 
-WHERE sender_id = $1
-RETURNING id, sender_id, receiver_id, created_at
+DELETE FROM friend_requests request
+USING users receiver
+WHERE request.id = $1
+  AND request.receiver_id = receiver.id
+  AND receiver.clerk_id = $2
+RETURNING request.id, request.sender_id, request.receiver_id, request.created_at
 `
 
-func (q *Queries) DeleteRequest(ctx context.Context, senderID int64) (FriendRequest, error) {
-	row := q.db.QueryRow(ctx, deleteRequest, senderID)
+type DeleteRequestParams struct {
+	ID      int64  `json:"id"`
+	ClerkID string `json:"clerk_id" validate:"required"`
+}
+
+func (q *Queries) DeleteRequest(ctx context.Context, arg DeleteRequestParams) (FriendRequest, error) {
+	row := q.db.QueryRow(ctx, deleteRequest, arg.ID, arg.ClerkID)
 	var i FriendRequest
 	err := row.Scan(
 		&i.ID,

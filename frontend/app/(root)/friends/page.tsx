@@ -7,22 +7,23 @@ import { Loader2 } from "lucide-react";
 import Request from "./_components/Request";
 import { useQuery } from "@tanstack/react-query";
 import { getRequests } from "@/api/friends";
-import { useAuth } from "@clerk/nextjs";
+import { useAuthInfo } from "@/hooks/useAuthInfo";
 
 export default function FriendsPage() {
-  const { userId: clerk_id } = useAuth();
+  const { userId: clerk_id, token } = useAuthInfo();
   const { data: requests } = useQuery({
     queryKey: ["friend_requests"],
     queryFn: () => {
-      if (!clerk_id) {
-        throw new Error("User ID is not available");
+      if (!clerk_id || !token) {
+        throw new Error("Authentication is not ready");
       }
-      return getRequests({ clerk_id });
+      return getRequests({ clerk_id, token });
     },
+    enabled: Boolean(clerk_id && token),
   });
   return (
     <>
-      <ItemList title='Friends' action={<AddFriendDialog clerkId={clerk_id || ""} />}>
+      <ItemList title='Friends' action={<AddFriendDialog />}>
         {requests ? (
           requests.length === 0 ? (
             <p className='w-full h-full flex items-center justify-center'>No friend requests found</p>
@@ -32,8 +33,6 @@ export default function FriendsPage() {
                 <Request
                   key={req.id}
                   id={req.id}
-                  senderId={req.sender_id}
-                  receiverId={req.receiver_id}
                   imageUrl={req.image_url}
                   username={req.username}
                   email={req.email}

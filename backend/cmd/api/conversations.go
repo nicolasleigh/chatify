@@ -1,16 +1,23 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/nicolasleigh/chat-app/store"
 )
 
 func (app *application) getConversation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	idString := r.PathValue("conversation_id")
-	clerkIdString := r.PathValue("clerk_id")
+	clerkID, err := authenticatedClerkID(ctx)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 	conversation_id, err := strconv.Atoi(idString)
 	if err != nil {
 		badRequestResponse(w, err)
@@ -18,7 +25,7 @@ func (app *application) getConversation(w http.ResponseWriter, r *http.Request) 
 	}
 
 	payload := store.GetConversationParams{
-		ClerkID:        clerkIdString,
+		ClerkID:        clerkID,
 		ConversationID: int64(conversation_id),
 	}
 
@@ -37,10 +44,14 @@ func (app *application) getConversation(w http.ResponseWriter, r *http.Request) 
 
 func (app *application) getAllConversations(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	clerk_id := r.PathValue("clerk_id")
+	clerkID, err := authenticatedClerkID(ctx)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 	var conversations [][]store.GetConversationRow
 
-	conversationIds, err := app.query.GetConversationsByClerkId(ctx, clerk_id)
+	conversationIds, err := app.query.GetConversationsByClerkId(ctx, clerkID)
 	if err != nil {
 		badRequestResponse(w, err)
 		return
@@ -48,7 +59,7 @@ func (app *application) getAllConversations(w http.ResponseWriter, r *http.Reque
 
 	for _, conversation_id := range conversationIds {
 		payload := store.GetConversationParams{
-			ClerkID:        clerk_id,
+			ClerkID:        clerkID,
 			ConversationID: int64(conversation_id),
 		}
 		data, err := app.query.GetConversation(ctx, payload)
@@ -69,7 +80,11 @@ func (app *application) getAllConversations(w http.ResponseWriter, r *http.Reque
 
 func (app *application) createGroup(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	idString := r.PathValue("clerk_id")
+	clerkID, err := authenticatedClerkID(ctx)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	var body struct {
 		Name          string  `json:"name"`
@@ -78,18 +93,27 @@ func (app *application) createGroup(w http.ResponseWriter, r *http.Request) {
 
 	var payload store.CreateGroupParams
 
-	err := readJSON(w, r, &body)
+	err = readJSON(w, r, &body)
 	if err != nil {
 		badRequestResponse(w, err)
 		return
 	}
+	if err := validateGroupInput(body.Name, body.Member_id_arr); err != nil {
+		badRequestResponse(w, err)
+		return
+	}
 
-	payload.Name = &body.Name
+	name := strings.TrimSpace(body.Name)
+	payload.Name = &name
 	payload.Column3 = body.Member_id_arr
-	payload.ClerkID = idString
+	payload.ClerkID = clerkID
 
-	err = app.query.CreateGroup(ctx, payload)
+	_, err = app.query.CreateGroup(ctx, payload)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			badRequestResponse(w, errors.New("group members must be friends"))
+			return
+		}
 		badRequestResponse(w, err)
 		return
 	}
@@ -101,18 +125,53 @@ func (app *application) createGroup(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+const maxGroupMembers = 100
+
+func validateGroupInput(name string, memberIDs []int64) error {
+	if strings.TrimSpace(name) == "" {
+		return errors.New("group name is required")
+	}
+	if len(name) > 200 {
+		return errors.New("group name is too long")
+	}
+	if len(memberIDs) == 0 {
+		return errors.New("at least one group member is required")
+	}
+	if len(memberIDs) > maxGroupMembers {
+		return errors.New("too many group members")
+	}
+
+	seen := make(map[int64]struct{}, len(memberIDs))
+	for _, memberID := range memberIDs {
+		if memberID <= 0 {
+			return errors.New("group member IDs must be positive")
+		}
+		if _, exists := seen[memberID]; exists {
+			return errors.New("group member IDs must be unique")
+		}
+		seen[memberID] = struct{}{}
+	}
+
+	return nil
+}
+
 func (app *application) leaveGroup(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	clerkID, err := authenticatedClerkID(ctx)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	idString := r.PathValue("conversation_id")
-	clerk_id := r.PathValue("clerk_id")
-	conversation_id, err := strconv.Atoi(idString)
+	conversationID, err := strconv.Atoi(idString)
 	if err != nil {
 		badRequestResponse(w, err)
 		return
 	}
 	payload := store.LeaveGroupParams{
-		ClerkID:        clerk_id,
-		ConversationID: int64(conversation_id),
+		ClerkID: clerkID,
+		ID:      int64(conversationID),
 	}
 	err = app.query.LeaveGroup(ctx, payload)
 	if err != nil {
@@ -125,16 +184,21 @@ func (app *application) leaveGroup(w http.ResponseWriter, r *http.Request) {
 
 func (app *application) deleteGroup(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	clerkID, err := authenticatedClerkID(ctx)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	idString := r.PathValue("conversation_id")
-	clerk_id := r.PathValue("clerk_id")
-	conversation_id, err := strconv.Atoi(idString)
+	conversationID, err := strconv.Atoi(idString)
 	if err != nil {
 		badRequestResponse(w, err)
 		return
 	}
 	payload := store.DeleteGroupParams{
-		ClerkID: clerk_id,
-		ID:      int64(conversation_id),
+		ClerkID: clerkID,
+		ID:      int64(conversationID),
 	}
 	err = app.query.DeleteGroup(ctx, payload)
 	if err != nil {

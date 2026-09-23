@@ -24,6 +24,7 @@ const chatMessageSchema = z.object({
 });
 type ChatInputParams = {
   sender_id: number;
+  websocket: WebSocket | null;
 };
 export default function ChatInput({ sender_id, websocket }: ChatInputParams) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -37,22 +38,25 @@ export default function ChatInput({ sender_id, websocket }: ChatInputParams) {
   const { mutate: sendMsg, isPending } = useMutation({
     mutationFn: ({ type, content }: { type: string; content: string }) =>
       // createMessage({ conversation_id: parseInt(conversationId), type, content, sender_id }),
-      new Promise((resolve, reject) => {
-        websocket?.send(JSON.stringify({ conversation_id: parseInt(conversationId), type, content, sender_id }));
-        if (websocket) {
-          let result = {};
-          websocket.onmessage = (event) => {
-            result = JSON.parse(event.data);
-            resolve(result);
-            queryClient.setQueryData(["messages", conversationId], (old: Message[] | undefined) => [
-              result,
-              ...(old || []),
-            ]);
-          };
-          setTimeout(() => {
-            if (Object.keys(result).length === 0) reject();
-          }, 2000);
+      new Promise<Message>((resolve, reject) => {
+        if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+          reject(new Error("WebSocket is not connected"));
+          return;
         }
+
+        websocket.send(JSON.stringify({ conversation_id: parseInt(conversationId), type, content, sender_id }));
+        let result: Message | undefined;
+        websocket.onmessage = (event: MessageEvent<string>) => {
+          result = JSON.parse(event.data) as Message;
+          resolve(result);
+          queryClient.setQueryData(["messages", conversationId], (old: Message[] | undefined) => [
+            result,
+            ...(old || []),
+          ]);
+        };
+        setTimeout(() => {
+          if (!result) reject(new Error("Message send timed out"));
+        }, 2000);
       }),
     onSuccess: () => {
       form.reset();

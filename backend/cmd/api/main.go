@@ -2,8 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"net/http"
 	"os"
+	"os/signal"
+	"strings"
+	"syscall"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -13,19 +18,26 @@ import (
 )
 
 type config struct {
-	port int
-	db   dbConfig
-	cors cors
+	port                  int
+	db                    dbConfig
+	cors                  cors
+	internalWebhookSecret string
 }
 
 type application struct {
 	config config
 	query  *store.Queries
+	db     databasePinger
 	// store store.Storage
 }
 
 type dbConfig struct {
-	dsn string
+	dsn               string
+	maxConns          int32
+	minConns          int32
+	maxConnLifetime   time.Duration
+	maxConnIdleTime   time.Duration
+	healthCheckPeriod time.Duration
 }
 
 type cors struct {
@@ -51,44 +63,92 @@ func main() {
 	}
 
 	cfg := config{
-		port: env.GetInt("PORT", 8084),
+		port:                  env.GetInt("PORT", 8084),
+		internalWebhookSecret: env.GetString("INTERNAL_WEBHOOK_SECRET", ""),
 		db: dbConfig{
-			// dsn: env.GetString("DB_DSN", "postgres://admin:adminpassword@localhost:5432/chat?sslmode=disable"),
-			dsn: dsnEnv,
+			dsn:               dsnEnv,
+			maxConns:          int32(env.GetInt("DB_MAX_CONNS", 10)),
+			minConns:          int32(env.GetInt("DB_MIN_CONNS", 2)),
+			maxConnLifetime:   time.Duration(env.GetInt("DB_MAX_CONN_LIFETIME_SECONDS", 1800)) * time.Second,
+			maxConnIdleTime:   time.Duration(env.GetInt("DB_MAX_CONN_IDLE_TIME_SECONDS", 300)) * time.Second,
+			healthCheckPeriod: time.Duration(env.GetInt("DB_HEALTH_CHECK_PERIOD_SECONDS", 60)) * time.Second,
 		},
 		cors: cors{
-			trustedOrigins: []string{"http://localhost:3000", "https://chat.linze.pro"},
+			trustedOrigins: parseTrustedOrigins(env.GetString(
+				"CORS_TRUSTED_ORIGINS",
+				"http://localhost:3000,https://chat.linze.pro",
+			)),
 		},
+	}
+	if err := validateConfig(cfg); err != nil {
+		slog.Error("invalid application configuration", "error", err)
+		os.Exit(1)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	pg, err := pg.NewPG(ctx, cfg.db.dsn)
+	db, err := pg.NewPG(ctx, cfg.db.dsn, pg.PoolConfig{
+		MaxConns:          cfg.db.maxConns,
+		MinConns:          cfg.db.minConns,
+		MaxConnLifetime:   cfg.db.maxConnLifetime,
+		MaxConnIdleTime:   cfg.db.maxConnIdleTime,
+		HealthCheckPeriod: cfg.db.healthCheckPeriod,
+	})
 	if err != nil {
-		slog.Error(err.Error())
+		slog.Error("database connection pool initialization failed", "error", err)
+		os.Exit(1)
 	}
-	defer pg.Close()
+	defer db.Close()
 
-	err = pg.Ping(ctx)
+	err = db.Ping(ctx)
 	if err != nil {
-		slog.Error(err.Error())
+		slog.Error("database ping failed", "error", err)
+		os.Exit(1)
 	}
 
-	q := store.New(pg.DB)
+	q := store.New(db.DB)
 
 	slog.Info("database connection pool established!")
 
 	app := &application{
 		config: cfg,
 		query:  q,
+		db:     db.DB,
 		// store: store,
 	}
 
 	srv := app.NewServer()
-	err = srv.ListenAndServe()
-	if err != nil {
-		slog.Error(err.Error())
-		os.Exit(1)
+	serverErr := make(chan error, 1)
+	go func() {
+		serverErr <- srv.ListenAndServe()
+	}()
+
+	shutdownSignal, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	select {
+	case err = <-serverErr:
+		if !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("http server stopped unexpectedly", "error", err)
+		}
+	case <-shutdownSignal.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			slog.Error("http server graceful shutdown failed", "error", err)
+		}
 	}
+}
+
+func parseTrustedOrigins(raw string) []string {
+	parts := strings.Split(raw, ",")
+	origins := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if origin := strings.TrimSpace(part); origin != "" {
+			origins = append(origins, origin)
+		}
+	}
+	return origins
 }

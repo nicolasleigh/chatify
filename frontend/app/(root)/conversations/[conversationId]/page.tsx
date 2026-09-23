@@ -6,7 +6,6 @@ import { useAuthInfo } from "@/hooks/useAuthInfo";
 import { useMessagesQuery } from "@/hooks/useMessagesQuery";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import { useSearchParams } from "next/navigation";
 import React, { useEffect, useState } from "react";
 import Header from "./_components/Header";
 import Body from "./_components/body/Body";
@@ -16,22 +15,25 @@ import RemoveFriendDialog from "./_components/dialogs/RemoveFriendDialog";
 import ChatInput from "./_components/input/ChatInput";
 
 type Props = {
-  params: Promise<{ conversationId: number }>;
+  params: Promise<{ conversationId: string }>;
 };
 
 export default function ConversationPage({ params }: Props) {
   const { conversationId } = React.use(params);
-  const searchParams = useSearchParams();
-  const { token } = useAuthInfo();
-  const clerk_id = searchParams.get("clerk_id");
+  const conversationNumber = Number(conversationId);
+  const { userId: clerk_id, token } = useAuthInfo();
   const { data: conversation } = useQuery({
     queryKey: ["conversation", conversationId],
     queryFn: () => {
       if (!clerk_id) {
         throw new Error("Clerk user not found");
       }
-      return getConversation({ conversation_id: conversationId, clerk_id });
+      if (!token) {
+        throw new Error("Authentication is not ready");
+      }
+      return getConversation({ conversation_id: conversationNumber, clerk_id, token });
     },
+    enabled: Boolean(clerk_id && token),
   });
 
   // const { addMessage, isAddMessagePending, isLoading, isReady, messages: storeMessages } = useMessagesStore({ userId });
@@ -65,7 +67,7 @@ export default function ConversationPage({ params }: Props) {
 
   // console.log("messages", msg);
 
-  const { messages, websocket } = useMessagesQuery(conversationId, token);
+  const { messages, websocket } = useMessagesQuery(conversationId, token || "");
 
   const [removeFriendDialogOpen, setRemoveFriendDialogOpen] = useState(false);
   const [deleteGroupDialogOpen, setDeleteGroupDialogOpen] = useState(false);
@@ -92,17 +94,21 @@ export default function ConversationPage({ params }: Props) {
   ) : (
     <ConversationContainer>
       <RemoveFriendDialog
-        conversationId={conversationId}
+        conversationId={conversationNumber}
         open={removeFriendDialogOpen}
         setOpen={setRemoveFriendDialogOpen}
       />
       <DeleteGroupDialog
-        conversationId={conversationId}
+        conversationId={conversationNumber}
         open={deleteGroupDialogOpen}
         setOpen={setDeleteGroupDialogOpen}
-        clerkId={clerk_id}
+        clerkId={clerk_id || ""}
       />
-      <LeaveGroupDialog conversationId={conversationId} open={leaveGroupDialogOpen} setOpen={setLeaveGroupDialogOpen} />
+      <LeaveGroupDialog
+        conversationId={conversationNumber}
+        open={leaveGroupDialogOpen}
+        setOpen={setLeaveGroupDialogOpen}
+      />
       <Header
         name={
           (conversation[0]?.is_group ? conversation[0].conversation_name : conversation[0].other_member_username) || ""
@@ -123,7 +129,6 @@ export default function ConversationPage({ params }: Props) {
         callType={callType}
         setCallType={setCallType}
         currentUserId={conversation[0].current_user_id}
-        websocket={websocket}
         msg={messages}
       />
       <ChatInput sender_id={conversation[0].current_user_id} websocket={websocket} />

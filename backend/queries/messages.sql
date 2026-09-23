@@ -2,7 +2,8 @@
 SELECT u.id as user_id, u.username, u.image_url, u.email, m.id as message_id, m.conversation_id as conversation_id, m.type, m.content, m.created_at FROM messages m
 JOIN users u ON u.id = m.sender_id
 WHERE conversation_id = $1
-ORDER BY m.created_at DESC;
+ORDER BY m.created_at DESC
+LIMIT $2;
 
 -- name: CreateMessage :one
 WITH messages_id AS (
@@ -24,15 +25,27 @@ JOIN users u ON u.id = m.sender_id
 WHERE m.id = $1;
 
 -- name: MarkReadMessage :exec
-UPDATE conversation_members 
+UPDATE conversation_members AS member
 SET last_seen_message_id = $3
-WHERE conversation_id = $1 AND member_id = $2;
+WHERE member.conversation_id = $1
+  AND member.member_id = $2
+  AND $3 IS NOT NULL
+  AND $3 > COALESCE(member.last_seen_message_id, 0)
+  AND EXISTS (
+    SELECT 1
+    FROM messages
+    WHERE messages.id = $3
+      AND messages.conversation_id = $1
+  );
 
 -- name: GetConversationLastMessage :one
 SELECT sender_id, users.username as sender_username, users.image_url as sender_image_url, content, type 
 FROM messages
 JOIN users ON users.id = sender_id
-WHERE messages.id = $1;
+JOIN conversation_members ON conversation_members.conversation_id = messages.conversation_id
+JOIN users viewer ON viewer.id = conversation_members.member_id
+WHERE messages.id = $1
+  AND viewer.clerk_id = $2;
 
 -- name: GetAllUnseenMessageCount :many
 WITH 

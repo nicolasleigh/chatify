@@ -49,6 +49,29 @@ I was responsible for full-stack development and system architecture:
 6. **Authentication**
    * Integrated **Clerk**, with **webhook support** to sync user metadata
 
+## 🔐 Required Runtime Configuration
+
+The backend and frontend webhook handler must share the same high-entropy
+`INTERNAL_WEBHOOK_SECRET`. The backend uses it to protect `POST /user` from
+unauthorized identity synchronization requests, while the Next.js webhook
+route sends it in the `X-Internal-Webhook-Secret` header.
+
+Backend production configuration also supports:
+
+* `CLOUD_DB_DSN` (or `DB_DSN` outside production)
+* `CLERK_KEY`
+* `CORS_TRUSTED_ORIGINS` (comma-separated HTTP origins for browser and WebSocket access)
+* `DB_MAX_CONNS` and `DB_MIN_CONNS`
+* `DB_MAX_CONN_LIFETIME_SECONDS`
+* `DB_MAX_CONN_IDLE_TIME_SECONDS`
+* `DB_HEALTH_CHECK_PERIOD_SECONDS`
+
+The matching `INTERNAL_WEBHOOK_SECRET` must also be present in the frontend
+server environment. Do not expose it through a `NEXT_PUBLIC_*` variable.
+
+Frontend deployments may override the backend endpoints with
+`NEXT_PUBLIC_API_BASE_URL` and `NEXT_PUBLIC_WS_BASE_URL`.
+
 ## 🧰 Tech Stack
 
 ### 💻 Frontend

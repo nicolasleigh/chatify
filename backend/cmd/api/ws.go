@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/nicolasleigh/chat-app/store"
@@ -16,7 +17,9 @@ import (
 type Client struct {
 	conn           *websocket.Conn
 	send           chan []byte
+	ctx            context.Context
 	userID         string
+	senderID       int64
 	conversationID int64
 }
 
@@ -37,12 +40,25 @@ type Message struct {
 	Content        *string `json:"content"`
 }
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		return true // Implement proper origin checking in production
-	},
+const (
+	websocketWriteWait      = 10 * time.Second
+	websocketPongWait       = 60 * time.Second
+	websocketPingPeriod     = (websocketPongWait * 9) / 10
+	websocketMaxMessageSize = 64 * 1024
+)
+
+func isTrustedOrigin(origin string, trustedOrigins []string) bool {
+	if origin == "" {
+		return false
+	}
+
+	for _, trustedOrigin := range trustedOrigins {
+		if origin == trustedOrigin {
+			return true
+		}
+	}
+
+	return false
 }
 
 func newHub() *Hub {
@@ -101,7 +117,7 @@ func (h *Hub) run() {
 				continue
 			}
 
-			h.mu.RLock()
+			h.mu.Lock()
 			// Send message only to clients in the same conversation
 			if clients, exists := h.conversations[msg.ConversationID]; exists {
 				for client := range clients {
@@ -113,7 +129,7 @@ func (h *Hub) run() {
 					}
 				}
 			}
-			h.mu.RUnlock()
+			h.mu.Unlock()
 		}
 	}
 }
@@ -123,6 +139,12 @@ func (c *Client) readPump(hub *Hub, app *application) {
 		hub.unregister <- c
 		c.conn.Close()
 	}()
+
+	c.conn.SetReadLimit(websocketMaxMessageSize)
+	_ = c.conn.SetReadDeadline(time.Now().Add(websocketPongWait))
+	c.conn.SetPongHandler(func(string) error {
+		return c.conn.SetReadDeadline(time.Now().Add(websocketPongWait))
+	})
 
 	for {
 		_, message, err := c.conn.ReadMessage()
@@ -145,6 +167,10 @@ func (c *Client) readPump(hub *Hub, app *application) {
 				c.userID, msg.ConversationID, c.conversationID)
 			continue
 		}
+		if err := validateCreateMessageInput(msg.ConversationID, msg.Type, msg.Content); err != nil {
+			log.Printf("invalid message from user %s: %v", c.userID, err)
+			continue
+		}
 
 		// content: "hi"
 		// conversation_id: 30
@@ -165,17 +191,17 @@ func (c *Client) readPump(hub *Hub, app *application) {
 		payload := store.CreateMessageParams{
 			Content:  msg.Content,
 			ID:       msg.ConversationID,
-			SenderID: msg.SenderID,
+			SenderID: c.senderID,
 			Type:     msg.Type,
 		}
 
-		messageId, err := app.query.CreateMessage(context.Background(), payload)
+		messageId, err := app.query.CreateMessage(c.ctx, payload)
 		if err != nil {
 			log.Printf("Error storing message: %v", err)
 			continue
 		}
 
-		returnMessage, err := app.query.GetMessageById(context.Background(), int64(messageId))
+		returnMessage, err := app.query.GetMessageById(c.ctx, int64(messageId))
 		if err != nil {
 			log.Printf("Error get message: %v", err)
 			continue
@@ -195,15 +221,25 @@ func (c *Client) writePump() {
 		c.conn.Close()
 	}()
 
+	ticker := time.NewTicker(websocketPingPeriod)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case message, ok := <-c.send:
 			if !ok {
+				_ = c.conn.SetWriteDeadline(time.Now().Add(websocketWriteWait))
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
 
+			_ = c.conn.SetWriteDeadline(time.Now().Add(websocketWriteWait))
 			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
+				return
+			}
+		case <-ticker.C:
+			_ = c.conn.SetWriteDeadline(time.Now().Add(websocketWriteWait))
+			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
 		}
@@ -211,25 +247,46 @@ func (c *Client) writePump() {
 }
 
 func (app *application) handleWebSocket(hub *Hub, w http.ResponseWriter, r *http.Request) {
+	if !isTrustedOrigin(r.Header.Get("Origin"), app.config.cors.trustedOrigins) {
+		http.Error(w, "forbidden origin", http.StatusForbidden)
+		return
+	}
+
 	conversationID, err := strconv.ParseInt(r.PathValue("conversation_id"), 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid conversation ID", http.StatusBadRequest)
 		return
 	}
 
-	clerkUser, err := getClerkUser(r.Context())
+	userID, err := authenticatedClerkID(r.Context())
 	if err != nil {
-		badRequestResponse(w, err)
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	// userID := getUserIDFromRequest(r) // Implement this based on your auth system
-	userID := clerkUser.ID
+	localUser, err := app.query.GetUser(r.Context(), userID)
+	if err != nil {
+		serverErrorResponse(w, err)
+		return
+	}
 
 	// Validate that the user has access to this conversation
-	if !app.hasAccessToConversation(userID, conversationID) {
+	hasAccess, err := app.hasAccessToConversation(r.Context(), localUser.ID, conversationID)
+	if err != nil {
+		serverErrorResponse(w, err)
+		return
+	}
+	if !hasAccess {
 		http.Error(w, "Unauthorized access to conversation", http.StatusForbidden)
 		return
+	}
+
+	upgrader := websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			return isTrustedOrigin(r.Header.Get("Origin"), app.config.cors.trustedOrigins)
+		},
 	}
 
 	conn, err := upgrader.Upgrade(w, r, nil)
@@ -241,7 +298,9 @@ func (app *application) handleWebSocket(hub *Hub, w http.ResponseWriter, r *http
 	client := &Client{
 		conn:           conn,
 		send:           make(chan []byte, 256),
+		ctx:            r.Context(),
 		userID:         userID,
+		senderID:       localUser.ID,
 		conversationID: conversationID,
 	}
 
@@ -253,8 +312,9 @@ func (app *application) handleWebSocket(hub *Hub, w http.ResponseWriter, r *http
 }
 
 // Helper function to check if a user has access to a conversation
-func (app *application) hasAccessToConversation(userID string, conversationID int64) bool {
-	// Implement your access control logic here
-	// Example: Check if the user is a member of the conversation in your database
-	return true
+func (app *application) hasAccessToConversation(ctx context.Context, userID int64, conversationID int64) (bool, error) {
+	return app.query.IsConversationMember(ctx, store.IsConversationMemberParams{
+		MemberID:       userID,
+		ConversationID: conversationID,
+	})
 }
