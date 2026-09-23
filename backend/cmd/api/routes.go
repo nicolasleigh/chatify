@@ -34,6 +34,9 @@ func (app *application) NewRouter() http.Handler {
 	mux.Handle("POST /message/mark_read", requireAuth(http.HandlerFunc(app.markReadMessage)))
 	mux.Handle("GET /message/{message_id}", requireAuth(http.HandlerFunc(app.getConversationLastMessage)))
 	mux.Handle("GET /message/unseen/{clerk_id}", requireAuth(http.HandlerFunc(app.getAllUnseenMessageCount)))
+	// Offline notifications
+	mux.Handle("POST /notifications/subscriptions", requireAuth(http.HandlerFunc(app.createPushSubscription)))
+	mux.Handle("DELETE /notifications/subscriptions/{subscription_id}", requireAuth(http.HandlerFunc(app.deletePushSubscription)))
 	// Conversation
 	mux.Handle("GET /conversation/{clerk_id}/{conversation_id}", requireAuth(http.HandlerFunc(app.getConversation)))
 	mux.Handle("GET /conversations/{clerk_id}", requireAuth(http.HandlerFunc(app.getAllConversations)))

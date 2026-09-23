@@ -166,6 +166,30 @@ func TestCreateMessageRequiresAuthentication(t *testing.T) {
 	}
 }
 
+func TestCreatePushSubscriptionRequiresAuthentication(t *testing.T) {
+	handler := (&application{}).NewRouter()
+	req := httptest.NewRequest(http.MethodPost, "/notifications/subscriptions", nil)
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)
+	}
+}
+
+func TestDeletePushSubscriptionRequiresAuthentication(t *testing.T) {
+	handler := (&application{}).NewRouter()
+	req := httptest.NewRequest(http.MethodDelete, "/notifications/subscriptions/1", nil)
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)
+	}
+}
+
 func TestMarkMessageReadRequiresAuthentication(t *testing.T) {
 	handler := (&application{}).NewRouter()
 	req := httptest.NewRequest(http.MethodPost, "/message/mark_read", nil)
