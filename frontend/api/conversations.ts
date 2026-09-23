@@ -112,10 +112,14 @@ export async function leaveGroup({ clerk_id, conversation_id, token }: leaveGrou
 type deleteGroupParams = {
   clerk_id: string;
   conversation_id: number;
+  token: string;
 };
-export async function deleteGroup({ clerk_id, conversation_id }: deleteGroupParams) {
+export async function deleteGroup({ clerk_id, conversation_id, token }: deleteGroupParams) {
   const response = await fetch(`${baseUrl}/group/delete/${clerk_id}/${conversation_id}`, {
     method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
   });
   if (!response.ok) {
     throw new Error(`HTTP error: ${response.status}`);
