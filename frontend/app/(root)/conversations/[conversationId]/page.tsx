@@ -15,11 +15,12 @@ import RemoveFriendDialog from "./_components/dialogs/RemoveFriendDialog";
 import ChatInput from "./_components/input/ChatInput";
 
 type Props = {
-  params: Promise<{ conversationId: number }>;
+  params: Promise<{ conversationId: string }>;
 };
 
 export default function ConversationPage({ params }: Props) {
   const { conversationId } = React.use(params);
+  const conversationNumber = Number(conversationId);
   const { userId: clerk_id, token } = useAuthInfo();
   const { data: conversation } = useQuery({
     queryKey: ["conversation", conversationId],
@@ -30,7 +31,7 @@ export default function ConversationPage({ params }: Props) {
       if (!token) {
         throw new Error("Authentication is not ready");
       }
-      return getConversation({ conversation_id: conversationId, clerk_id, token });
+      return getConversation({ conversation_id: conversationNumber, clerk_id, token });
     },
     enabled: Boolean(clerk_id && token),
   });
@@ -66,7 +67,7 @@ export default function ConversationPage({ params }: Props) {
 
   // console.log("messages", msg);
 
-  const { messages, websocket } = useMessagesQuery(conversationId, token);
+  const { messages, websocket } = useMessagesQuery(conversationId, token || "");
 
   const [removeFriendDialogOpen, setRemoveFriendDialogOpen] = useState(false);
   const [deleteGroupDialogOpen, setDeleteGroupDialogOpen] = useState(false);
@@ -93,17 +94,21 @@ export default function ConversationPage({ params }: Props) {
   ) : (
     <ConversationContainer>
       <RemoveFriendDialog
-        conversationId={conversationId}
+        conversationId={conversationNumber}
         open={removeFriendDialogOpen}
         setOpen={setRemoveFriendDialogOpen}
       />
       <DeleteGroupDialog
-        conversationId={conversationId}
+        conversationId={conversationNumber}
         open={deleteGroupDialogOpen}
         setOpen={setDeleteGroupDialogOpen}
         clerkId={clerk_id || ""}
       />
-      <LeaveGroupDialog conversationId={conversationId} open={leaveGroupDialogOpen} setOpen={setLeaveGroupDialogOpen} />
+      <LeaveGroupDialog
+        conversationId={conversationNumber}
+        open={leaveGroupDialogOpen}
+        setOpen={setLeaveGroupDialogOpen}
+      />
       <Header
         name={
           (conversation[0]?.is_group ? conversation[0].conversation_name : conversation[0].other_member_username) || ""
