@@ -8,7 +8,10 @@ import (
 
 func (app *application) NewRouter() http.Handler {
 	mux := http.NewServeMux()
-	hub := newHub()
+	if app.presence == nil {
+		app.presence = newMemoryPresence()
+	}
+	hub := newHub(app.presence)
 	requireAuth := clerkhttp.RequireHeaderAuthorization(clerkhttp.AuthorizationJWTExtractor(extractClerkJWT))
 	go hub.run()
 

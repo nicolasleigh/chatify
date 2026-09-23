@@ -30,6 +30,7 @@ type Hub struct {
 	broadcast     chan []byte
 	register      chan *Client
 	unregister    chan *Client
+	presence      PresenceStore
 	mu            sync.RWMutex
 }
 
@@ -61,12 +62,16 @@ func isTrustedOrigin(origin string, trustedOrigins []string) bool {
 	return false
 }
 
-func newHub() *Hub {
+func newHub(presence PresenceStore) *Hub {
+	if presence == nil {
+		presence = newMemoryPresence()
+	}
 	return &Hub{
 		conversations: make(map[int64]map[*Client]bool),
 		broadcast:     make(chan []byte),
 		register:      make(chan *Client),
 		unregister:    make(chan *Client),
+		presence:      presence,
 	}
 }
 
@@ -81,6 +86,7 @@ func (h *Hub) run() {
 			}
 			// Add client to their conversation group
 			h.conversations[client.conversationID][client] = true
+			h.presence.MarkOnline(client.senderID)
 
 			// Log connection for debugging
 			log.Printf("User %s joined conversation %d. Total participants: %d",
@@ -96,6 +102,7 @@ func (h *Hub) run() {
 				if _, ok := clients[client]; ok {
 					delete(clients, client)
 					close(client.send)
+					h.presence.MarkOffline(client.senderID)
 
 					// Remove conversation if empty
 					if len(clients) == 0 {

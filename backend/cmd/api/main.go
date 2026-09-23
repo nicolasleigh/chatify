@@ -29,9 +29,10 @@ type config struct {
 }
 
 type application struct {
-	config config
-	query  *store.Queries
-	db     databasePinger
+	config   config
+	query    *store.Queries
+	db       databasePinger
+	presence PresenceStore
 	// store store.Storage
 }
 
