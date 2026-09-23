@@ -160,6 +160,17 @@ func parseMessageHistoryLimit(rawLimit string) (int32, error) {
 	return int32(limit), nil
 }
 
+func validateMarkReadInput(conversationID int64, lastSeenMessageID *int64) error {
+	if conversationID <= 0 {
+		return errors.New("conversation ID must be positive")
+	}
+	if lastSeenMessageID == nil || *lastSeenMessageID <= 0 {
+		return errors.New("last seen message ID must be positive")
+	}
+
+	return nil
+}
+
 func (app *application) markReadMessage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var payload store.MarkReadMessageParams
@@ -171,6 +182,10 @@ func (app *application) markReadMessage(w http.ResponseWriter, r *http.Request) 
 
 	err = readJSON(w, r, &payload)
 	if err != nil {
+		badRequestResponse(w, err)
+		return
+	}
+	if err := validateMarkReadInput(payload.ConversationID, payload.LastSeenMessageID); err != nil {
 		badRequestResponse(w, err)
 		return
 	}
