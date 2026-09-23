@@ -1,17 +1,18 @@
 import { getUnseenMessageCount } from "@/api/messages";
-import { useAuth } from "@clerk/nextjs";
+import { useAuthInfo } from "@/hooks/useAuthInfo";
 import { useQuery } from "@tanstack/react-query";
 
 export default function useGetUnseenCount() {
-  const { userId: clerk_id } = useAuth();
+  const { userId: clerk_id, token } = useAuthInfo();
   const { data } = useQuery({
     queryKey: ["unseen_message_count"],
     queryFn: () => {
-      if (!clerk_id) {
-        throw new Error("User id not found");
+      if (!clerk_id || !token) {
+        throw new Error("Authentication is not ready");
       }
-      return getUnseenMessageCount({ clerk_id });
+      return getUnseenMessageCount({ clerk_id, token });
     },
+    enabled: Boolean(clerk_id && token),
     refetchInterval: 1000,
   });
   // const queryClient = useQueryClient();

@@ -125,9 +125,13 @@ func (app *application) getConversationLastMessage(w http.ResponseWriter, r *htt
 
 func (app *application) getAllUnseenMessageCount(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	clerk_id := r.PathValue("clerk_id")
+	clerkID, err := authenticatedClerkID(ctx)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-	data, err := app.query.GetAllUnseenMessageCount(ctx, clerk_id)
+	data, err := app.query.GetAllUnseenMessageCount(ctx, clerkID)
 	if err != nil {
 		badRequestResponse(w, err)
 		return

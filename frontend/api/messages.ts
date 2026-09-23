@@ -115,12 +115,17 @@ const getUnseenMessageCountSchema = z.array(
 );
 type getUnseenMessageCountParams = {
   clerk_id: string;
+  token: string;
 };
 export async function getUnseenMessageCount({
   clerk_id,
+  token,
 }: getUnseenMessageCountParams): Promise<z.infer<typeof getUnseenMessageCountSchema>> {
   const response = await fetch(`${baseUrl}/message/unseen/${clerk_id}`, {
     method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
   });
   if (!response.ok) {
     throw new Error(`HTTP error: ${response.status}`);
