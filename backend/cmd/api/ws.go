@@ -37,12 +37,18 @@ type Message struct {
 	Content        *string `json:"content"`
 }
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		return true // Implement proper origin checking in production
-	},
+func isTrustedOrigin(origin string, trustedOrigins []string) bool {
+	if origin == "" {
+		return false
+	}
+
+	for _, trustedOrigin := range trustedOrigins {
+		if origin == trustedOrigin {
+			return true
+		}
+	}
+
+	return false
 }
 
 func newHub() *Hub {
@@ -211,6 +217,11 @@ func (c *Client) writePump() {
 }
 
 func (app *application) handleWebSocket(hub *Hub, w http.ResponseWriter, r *http.Request) {
+	if !isTrustedOrigin(r.Header.Get("Origin"), app.config.cors.trustedOrigins) {
+		http.Error(w, "forbidden origin", http.StatusForbidden)
+		return
+	}
+
 	conversationID, err := strconv.ParseInt(r.PathValue("conversation_id"), 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid conversation ID", http.StatusBadRequest)
@@ -230,6 +241,14 @@ func (app *application) handleWebSocket(hub *Hub, w http.ResponseWriter, r *http
 	if !app.hasAccessToConversation(userID, conversationID) {
 		http.Error(w, "Unauthorized access to conversation", http.StatusForbidden)
 		return
+	}
+
+	upgrader := websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			return isTrustedOrigin(r.Header.Get("Origin"), app.config.cors.trustedOrigins)
+		},
 	}
 
 	conn, err := upgrader.Upgrade(w, r, nil)
