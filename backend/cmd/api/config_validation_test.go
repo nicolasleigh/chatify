@@ -21,6 +21,12 @@ func validTestConfig() config {
 			pollInterval: time.Second,
 			batchSize:    50,
 		},
+		notification: notificationConfig{
+			queue:        "chatify.notifications",
+			pollInterval: time.Second,
+			batchSize:    50,
+			maxAttempts:  5,
+		},
 	}
 }
 
@@ -39,5 +45,15 @@ func TestValidateConfigRequiresWebhookSecret(t *testing.T) {
 
 	if err := validateConfig(cfg); err == nil {
 		t.Fatal("validateConfig() error = nil, want missing webhook secret error")
+	}
+}
+
+func TestValidateConfigRequiresVAPIDSettingsWhenNotificationsEnabled(t *testing.T) {
+	t.Setenv("CLERK_KEY", "test-clerk-key")
+	cfg := validTestConfig()
+	cfg.notification.enabled = true
+
+	if err := validateConfig(cfg); err == nil {
+		t.Fatal("validateConfig() error = nil, want missing VAPID settings error")
 	}
 }

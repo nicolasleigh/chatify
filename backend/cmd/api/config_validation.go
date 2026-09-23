@@ -34,6 +34,29 @@ func validateConfig(cfg config) error {
 	if cfg.rabbitmq.batchSize < 1 {
 		return errors.New("OUTBOX_BATCH_SIZE must be greater than zero")
 	}
+	if strings.TrimSpace(cfg.notification.queue) == "" {
+		return errors.New("NOTIFICATION_CONSUMER_QUEUE is required")
+	}
+	if cfg.notification.pollInterval <= 0 {
+		return errors.New("NOTIFICATION_POLL_INTERVAL_SECONDS must be greater than zero")
+	}
+	if cfg.notification.batchSize < 1 {
+		return errors.New("NOTIFICATION_BATCH_SIZE must be greater than zero")
+	}
+	if cfg.notification.maxAttempts < 1 {
+		return errors.New("NOTIFICATION_RETRY_LIMIT must be greater than zero")
+	}
+	if cfg.notification.enabled {
+		if strings.TrimSpace(cfg.notification.vapidPublicKey) == "" {
+			return errors.New("WEB_PUSH_VAPID_PUBLIC_KEY is required when notifications are enabled")
+		}
+		if strings.TrimSpace(cfg.notification.vapidPrivateKey) == "" {
+			return errors.New("WEB_PUSH_VAPID_PRIVATE_KEY is required when notifications are enabled")
+		}
+		if strings.TrimSpace(cfg.notification.vapidSubject) == "" {
+			return errors.New("WEB_PUSH_VAPID_SUBJECT is required when notifications are enabled")
+		}
+	}
 	if cfg.db.maxConns < 1 {
 		return errors.New("DB_MAX_CONNS must be greater than zero")
 	}

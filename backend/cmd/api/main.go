@@ -25,6 +25,7 @@ type config struct {
 	cors                  cors
 	internalWebhookSecret string
 	rabbitmq              rabbitmqConfig
+	notification          notificationConfig
 }
 
 type application struct {
@@ -52,6 +53,21 @@ type rabbitmqConfig struct {
 	exchange     string
 	pollInterval time.Duration
 	batchSize    int32
+}
+
+// notificationConfig contains the future-facing delivery settings for
+// offline browser notifications. The feature is opt-in until the subscription
+// API and Web Push provider are installed, so existing deployments can roll
+// out the data model and consumers independently.
+type notificationConfig struct {
+	enabled         bool
+	queue           string
+	pollInterval    time.Duration
+	batchSize       int32
+	maxAttempts     int32
+	vapidPublicKey  string
+	vapidPrivateKey string
+	vapidSubject    string
 }
 
 var (
@@ -94,6 +110,16 @@ func main() {
 			exchange:     env.GetString("RABBITMQ_EVENTS_EXCHANGE", "chatify.events"),
 			pollInterval: time.Duration(env.GetInt("OUTBOX_POLL_INTERVAL_SECONDS", 1)) * time.Second,
 			batchSize:    int32(env.GetInt("OUTBOX_BATCH_SIZE", 50)),
+		},
+		notification: notificationConfig{
+			enabled:         env.GetBool("NOTIFICATION_ENABLED", false),
+			queue:           env.GetString("NOTIFICATION_CONSUMER_QUEUE", "chatify.notifications"),
+			pollInterval:    time.Duration(env.GetInt("NOTIFICATION_POLL_INTERVAL_SECONDS", 1)) * time.Second,
+			batchSize:       int32(env.GetInt("NOTIFICATION_BATCH_SIZE", 50)),
+			maxAttempts:     int32(env.GetInt("NOTIFICATION_RETRY_LIMIT", 5)),
+			vapidPublicKey:  env.GetString("WEB_PUSH_VAPID_PUBLIC_KEY", ""),
+			vapidPrivateKey: env.GetString("WEB_PUSH_VAPID_PRIVATE_KEY", ""),
+			vapidSubject:    env.GetString("WEB_PUSH_VAPID_SUBJECT", ""),
 		},
 	}
 	if err := validateConfig(cfg); err != nil {
