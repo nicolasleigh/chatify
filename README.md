@@ -60,6 +60,10 @@ Backend production configuration also supports:
 
 * `CLOUD_DB_DSN` (or `DB_DSN` outside production)
 * `CLERK_KEY`
+* `RABBITMQ_URL`
+* `RABBITMQ_EVENTS_EXCHANGE`
+* `OUTBOX_POLL_INTERVAL_SECONDS`
+* `OUTBOX_BATCH_SIZE`
 * `CORS_TRUSTED_ORIGINS` (comma-separated HTTP origins for browser and WebSocket access)
 * `DB_MAX_CONNS` and `DB_MIN_CONNS`
 * `DB_MAX_CONN_LIFETIME_SECONDS`

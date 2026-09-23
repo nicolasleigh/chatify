@@ -22,6 +22,18 @@ func validateConfig(cfg config) error {
 	if len(cfg.cors.trustedOrigins) == 0 {
 		return errors.New("at least one trusted CORS origin is required")
 	}
+	if strings.TrimSpace(cfg.rabbitmq.url) == "" {
+		return errors.New("RABBITMQ_URL is required")
+	}
+	if strings.TrimSpace(cfg.rabbitmq.exchange) == "" {
+		return errors.New("RABBITMQ_EVENTS_EXCHANGE is required")
+	}
+	if cfg.rabbitmq.pollInterval <= 0 {
+		return errors.New("OUTBOX_POLL_INTERVAL_SECONDS must be greater than zero")
+	}
+	if cfg.rabbitmq.batchSize < 1 {
+		return errors.New("OUTBOX_BATCH_SIZE must be greater than zero")
+	}
 	if cfg.db.maxConns < 1 {
 		return errors.New("DB_MAX_CONNS must be greater than zero")
 	}

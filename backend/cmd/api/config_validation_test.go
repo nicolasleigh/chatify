@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func validTestConfig() config {
 	return config{
@@ -12,6 +15,12 @@ func validTestConfig() config {
 		},
 		cors:                  cors{trustedOrigins: []string{"http://localhost:3000"}},
 		internalWebhookSecret: "test-secret",
+		rabbitmq: rabbitmqConfig{
+			url:          "amqp://guest:guest@localhost:5672/",
+			exchange:     "chatify.events",
+			pollInterval: time.Second,
+			batchSize:    50,
+		},
 	}
 }
 

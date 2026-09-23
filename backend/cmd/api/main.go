@@ -22,6 +22,7 @@ type config struct {
 	db                    dbConfig
 	cors                  cors
 	internalWebhookSecret string
+	rabbitmq              rabbitmqConfig
 }
 
 type application struct {
@@ -42,6 +43,13 @@ type dbConfig struct {
 
 type cors struct {
 	trustedOrigins []string
+}
+
+type rabbitmqConfig struct {
+	url          string
+	exchange     string
+	pollInterval time.Duration
+	batchSize    int32
 }
 
 var (
@@ -78,6 +86,12 @@ func main() {
 				"CORS_TRUSTED_ORIGINS",
 				"http://localhost:3000,https://chat.linze.pro",
 			)),
+		},
+		rabbitmq: rabbitmqConfig{
+			url:          env.GetString("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/"),
+			exchange:     env.GetString("RABBITMQ_EVENTS_EXCHANGE", "chatify.events"),
+			pollInterval: time.Duration(env.GetInt("OUTBOX_POLL_INTERVAL_SECONDS", 1)) * time.Second,
+			batchSize:    int32(env.GetInt("OUTBOX_BATCH_SIZE", 50)),
 		},
 	}
 	if err := validateConfig(cfg); err != nil {
