@@ -6,7 +6,6 @@ import { useAuthInfo } from "@/hooks/useAuthInfo";
 import { useMessagesQuery } from "@/hooks/useMessagesQuery";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import { useSearchParams } from "next/navigation";
 import React, { useEffect, useState } from "react";
 import Header from "./_components/Header";
 import Body from "./_components/body/Body";
@@ -21,9 +20,7 @@ type Props = {
 
 export default function ConversationPage({ params }: Props) {
   const { conversationId } = React.use(params);
-  const searchParams = useSearchParams();
-  const { token } = useAuthInfo();
-  const clerk_id = searchParams.get("clerk_id");
+  const { userId: clerk_id, token } = useAuthInfo();
   const { data: conversation } = useQuery({
     queryKey: ["conversation", conversationId],
     queryFn: () => {
@@ -104,7 +101,7 @@ export default function ConversationPage({ params }: Props) {
         conversationId={conversationId}
         open={deleteGroupDialogOpen}
         setOpen={setDeleteGroupDialogOpen}
-        clerkId={clerk_id}
+        clerkId={clerk_id || ""}
       />
       <LeaveGroupDialog conversationId={conversationId} open={leaveGroupDialogOpen} setOpen={setLeaveGroupDialogOpen} />
       <Header
