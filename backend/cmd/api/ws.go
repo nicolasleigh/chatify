@@ -167,6 +167,10 @@ func (c *Client) readPump(hub *Hub, app *application) {
 				c.userID, msg.ConversationID, c.conversationID)
 			continue
 		}
+		if err := validateCreateMessageInput(msg.ConversationID, msg.Type, msg.Content); err != nil {
+			log.Printf("invalid message from user %s: %v", c.userID, err)
+			continue
+		}
 
 		// content: "hi"
 		// conversation_id: 30
