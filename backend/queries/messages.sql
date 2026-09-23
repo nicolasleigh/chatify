@@ -24,9 +24,18 @@ JOIN users u ON u.id = m.sender_id
 WHERE m.id = $1;
 
 -- name: MarkReadMessage :exec
-UPDATE conversation_members 
+UPDATE conversation_members AS member
 SET last_seen_message_id = $3
-WHERE conversation_id = $1 AND member_id = $2;
+WHERE member.conversation_id = $1
+  AND member.member_id = $2
+  AND $3 IS NOT NULL
+  AND $3 > COALESCE(member.last_seen_message_id, 0)
+  AND EXISTS (
+    SELECT 1
+    FROM messages
+    WHERE messages.id = $3
+      AND messages.conversation_id = $1
+  );
 
 -- name: GetConversationLastMessage :one
 SELECT sender_id, users.username as sender_username, users.image_url as sender_image_url, content, type 
