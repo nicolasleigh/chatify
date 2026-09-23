@@ -17,9 +17,10 @@ import (
 )
 
 type config struct {
-	port int
-	db   dbConfig
-	cors cors
+	port                  int
+	db                    dbConfig
+	cors                  cors
+	internalWebhookSecret string
 }
 
 type application struct {
@@ -61,7 +62,8 @@ func main() {
 	}
 
 	cfg := config{
-		port: env.GetInt("PORT", 8084),
+		port:                  env.GetInt("PORT", 8084),
+		internalWebhookSecret: env.GetString("INTERNAL_WEBHOOK_SECRET", ""),
 		db: dbConfig{
 			dsn:               dsnEnv,
 			maxConns:          int32(env.GetInt("DB_MAX_CONNS", 10)),

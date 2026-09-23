@@ -64,6 +64,7 @@ export async function POST(req: Request) {
         }),
         headers: {
           "Content-Type": "application/json",
+          "X-Internal-Webhook-Secret": process.env.INTERNAL_WEBHOOK_SECRET ?? "",
         },
       });
 

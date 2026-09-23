@@ -190,6 +190,18 @@ func TestHealthRemainsPublic(t *testing.T) {
 	}
 }
 
+func TestUserWebhookRequiresInternalSecret(t *testing.T) {
+	handler := (&application{}).NewRouter()
+	req := httptest.NewRequest(http.MethodPost, "/user", nil)
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusUnauthorized)
+	}
+}
+
 func TestReadinessFailsWithoutDatabase(t *testing.T) {
 	handler := (&application{}).NewRouter()
 	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
