@@ -11,8 +11,8 @@ type Props = {
   senderImage: string;
   senderName: string;
   lastByUser: boolean;
-  content: string[];
-  createdAt: number;
+  content: string | string[];
+  createdAt: string | number;
   type: string;
   seen?: ReactNode;
 };
@@ -27,9 +27,10 @@ export default function Message({
   type,
   seen,
 }: Props) {
-  const formatTime = (timestamp: number) => {
-    return format(timestamp, "HH:mm");
+  const formatTime = (timestamp: string | number) => {
+    return format(new Date(timestamp), "HH:mm");
   };
+  const contentAsArray = Array.isArray(content) ? content : [content];
   return (
     <div
       className={cn("flex items-end", {
@@ -50,9 +51,11 @@ export default function Message({
             "rounded-bl-none": !lastByUser && !fromCurrentUser,
           })}
         >
-          {type === "text" ? <p className='text-wrap break-words whitespace-pre-wrap break-all'>{content}</p> : null}
-          {type === "imageUploader" ? <ImagePreview urls={content} /> : null}
-          {type === "file" ? <FilePreview url={content[0]} /> : null}
+          {type === "text" ? (
+            <p className='text-wrap break-words whitespace-pre-wrap break-all'>{contentAsArray.join("")}</p>
+          ) : null}
+          {type === "imageUploader" ? <ImagePreview urls={contentAsArray} /> : null}
+          {type === "file" ? <FilePreview url={contentAsArray[0]} /> : null}
           {type === "call" ? <Badge className='bg-slate-600'>Joined Call</Badge> : null}
           <p
             className={cn("text-xs flex w-full my-1", {
