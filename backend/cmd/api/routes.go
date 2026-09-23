@@ -2,11 +2,14 @@ package main
 
 import (
 	"net/http"
+
+	clerkhttp "github.com/clerk/clerk-sdk-go/v2/http"
 )
 
 func (app *application) NewRouter() http.Handler {
 	mux := http.NewServeMux()
 	hub := newHub()
+	requireAuth := clerkhttp.RequireHeaderAuthorization(clerkhttp.AuthorizationJWTExtractor(extractClerkJWT))
 	go hub.run()
 
 	// Health
@@ -22,7 +25,7 @@ func (app *application) NewRouter() http.Handler {
 	mux.HandleFunc("GET /requests/{clerk_id}", app.getRequests)
 	// Message
 	mux.HandleFunc("POST /message", app.createMessage)
-	mux.HandleFunc("GET /messages/{conversation_id}", app.getMessages)
+	mux.Handle("GET /messages/{conversation_id}", requireAuth(http.HandlerFunc(app.getMessages)))
 	mux.HandleFunc("POST /message/mark_read", app.markReadMessage)
 	mux.HandleFunc("GET /message/{message_id}", app.getConversationLastMessage)
 	mux.HandleFunc("GET /message/unseen/{clerk_id}", app.getAllUnseenMessageCount)
@@ -34,9 +37,9 @@ func (app *application) NewRouter() http.Handler {
 	mux.HandleFunc("DELETE /group/leave/{clerk_id}/{conversation_id}", app.leaveGroup)
 	mux.HandleFunc("DELETE /group/delete/{clerk_id}/{conversation_id}", app.deleteGroup)
 	// WebSocket
-	mux.HandleFunc("/ws/{conversation_id}", func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/ws/{conversation_id}", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		app.handleWebSocket(hub, w, r)
-	})
+	})))
 
 	return mux
 }
