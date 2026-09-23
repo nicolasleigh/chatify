@@ -21,7 +21,7 @@ WHERE request.id = $1
   AND receiver.clerk_id = $2
 RETURNING request.id, request.sender_id, request.receiver_id, request.created_at;
 
--- name: AcceptRequest :exec
+-- name: AcceptRequest :one
 WITH deleted_request AS (
   DELETE FROM friend_requests request
   USING users receiver
@@ -45,13 +45,19 @@ friend_insert AS (
   FROM deleted_request request
   CROSS JOIN new_conversation conversation
   RETURNING user_a_id, user_b_id, conversation_id
+),
+member_insert AS (
+  INSERT INTO conversation_members (member_id, conversation_id)
+  SELECT member_id, conversation_id
+  FROM friend_insert
+  CROSS JOIN LATERAL (
+    VALUES (friend_insert.user_a_id), (friend_insert.user_b_id)
+  ) AS members(member_id)
+  RETURNING conversation_id
 )
-INSERT INTO conversation_members (member_id, conversation_id)
-SELECT member_id, conversation_id
-FROM friend_insert
-CROSS JOIN LATERAL (
-  VALUES (friend_insert.user_a_id), (friend_insert.user_b_id)
-) AS members(member_id);
+SELECT conversation_id
+FROM member_insert
+LIMIT 1;
 
 -- name: GetFriends :many
 WITH clerk_users AS (

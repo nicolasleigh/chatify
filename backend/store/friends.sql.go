@@ -9,7 +9,7 @@ import (
 	"context"
 )
 
-const acceptRequest = `-- name: AcceptRequest :exec
+const acceptRequest = `-- name: AcceptRequest :one
 WITH deleted_request AS (
   DELETE FROM friend_requests request
   USING users receiver
@@ -33,13 +33,19 @@ friend_insert AS (
   FROM deleted_request request
   CROSS JOIN new_conversation conversation
   RETURNING user_a_id, user_b_id, conversation_id
+),
+member_insert AS (
+  INSERT INTO conversation_members (member_id, conversation_id)
+  SELECT member_id, conversation_id
+  FROM friend_insert
+  CROSS JOIN LATERAL (
+    VALUES (friend_insert.user_a_id), (friend_insert.user_b_id)
+  ) AS members(member_id)
+  RETURNING conversation_id
 )
-INSERT INTO conversation_members (member_id, conversation_id)
-SELECT member_id, conversation_id
-FROM friend_insert
-CROSS JOIN LATERAL (
-  VALUES (friend_insert.user_a_id), (friend_insert.user_b_id)
-) AS members(member_id)
+SELECT conversation_id
+FROM member_insert
+LIMIT 1
 `
 
 type AcceptRequestParams struct {
@@ -47,9 +53,11 @@ type AcceptRequestParams struct {
 	ClerkID string `json:"clerk_id" validate:"required"`
 }
 
-func (q *Queries) AcceptRequest(ctx context.Context, arg AcceptRequestParams) error {
-	_, err := q.db.Exec(ctx, acceptRequest, arg.ID, arg.ClerkID)
-	return err
+func (q *Queries) AcceptRequest(ctx context.Context, arg AcceptRequestParams) (int64, error) {
+	row := q.db.QueryRow(ctx, acceptRequest, arg.ID, arg.ClerkID)
+	var conversation_id int64
+	err := row.Scan(&conversation_id)
+	return conversation_id, err
 }
 
 const createRequest = `-- name: CreateRequest :exec

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/nicolasleigh/chat-app/store"
 )
@@ -117,8 +118,12 @@ func (app *application) acceptRequest(w http.ResponseWriter, r *http.Request) {
 
 	payload := store.AcceptRequestParams{ID: int64(request_id), ClerkID: clerkID}
 
-	err = app.query.AcceptRequest(ctx, payload)
+	_, err = app.query.AcceptRequest(ctx, payload)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			notFoundResponse(w, errors.New("friend request not found"))
+			return
+		}
 		badRequestResponse(w, err)
 		return
 	}
