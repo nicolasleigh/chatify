@@ -45,6 +45,69 @@ func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (i
 	return message_id, err
 }
 
+const createMessageWithOutbox = `-- name: CreateMessageWithOutbox :one
+-- Keep the message write, conversation preview update, and event creation in
+-- one SQL statement. PostgreSQL commits all data-modifying CTEs atomically, so
+-- the worker can never publish an event for a message that was rolled back.
+WITH messages_id AS (
+    INSERT INTO messages (
+        sender_id, conversation_id, type, content
+    ) VALUES (
+        $1, $2, $3, $4
+    )
+    RETURNING id
+), updated_conversation AS (
+    UPDATE conversations
+    SET last_message_id = (SELECT id FROM messages_id)
+    WHERE conversations.id = $2
+    RETURNING id
+), inserted_outbox AS (
+INSERT INTO outbox_events (
+    event_type,
+    event_version,
+    aggregate_type,
+    aggregate_id,
+    payload
+)
+SELECT
+    'message.created',
+    1,
+    'message',
+    messages_id.id,
+    jsonb_build_object(
+        'message_id', messages_id.id,
+        'conversation_id', $2,
+        'sender_id', $1,
+        'type', $3,
+        'content', $4
+    )
+FROM messages_id
+JOIN updated_conversation ON updated_conversation.id = $2
+RETURNING aggregate_id AS message_id
+)
+SELECT message_id
+FROM inserted_outbox
+`
+
+type CreateMessageWithOutboxParams struct {
+	SenderID int64   `json:"sender_id"`
+	ID       int64   `json:"id"`
+	Type     *string `json:"type"`
+	Content  *string `json:"content"`
+}
+
+func (q *Queries) CreateMessageWithOutbox(ctx context.Context, arg CreateMessageWithOutboxParams) (int64, error) {
+	row := q.db.QueryRow(ctx, createMessageWithOutbox,
+		arg.SenderID,
+		arg.ID,
+		arg.Type,
+		arg.Content,
+	)
+	var message_id int64
+	err := row.Scan(&message_id)
+	return message_id, err
+}
+
 const getAllUnseenMessageCount = `-- name: GetAllUnseenMessageCount :many
 WITH 
     clerk_users AS (

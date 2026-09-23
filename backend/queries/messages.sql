@@ -19,6 +19,49 @@ SET last_message_id = (SELECT id FROM messages_id)
 WHERE conversations.id = $2
 RETURNING (SELECT id FROM messages_id) as message_id;
 
+-- name: CreateMessageWithOutbox :one
+-- Keep the message write, conversation preview update, and event creation in
+-- one SQL statement. PostgreSQL commits all data-modifying CTEs atomically, so
+-- the worker can never publish an event for a message that was rolled back.
+WITH messages_id AS (
+    INSERT INTO messages (
+        sender_id, conversation_id, type, content
+    ) VALUES (
+        $1, $2, $3, $4
+    )
+    RETURNING id
+), updated_conversation AS (
+    UPDATE conversations
+    SET last_message_id = (SELECT id FROM messages_id)
+    WHERE conversations.id = $2
+    RETURNING id
+), inserted_outbox AS (
+INSERT INTO outbox_events (
+    event_type,
+    event_version,
+    aggregate_type,
+    aggregate_id,
+    payload
+)
+SELECT
+    'message.created',
+    1,
+    'message',
+    messages_id.id,
+    jsonb_build_object(
+        'message_id', messages_id.id,
+        'conversation_id', $2,
+        'sender_id', $1,
+        'type', $3,
+        'content', $4
+    )
+FROM messages_id
+JOIN updated_conversation ON updated_conversation.id = $2
+RETURNING aggregate_id AS message_id
+)
+SELECT message_id
+FROM inserted_outbox;
+
 -- name: GetMessageById :one
 SELECT u.id as user_id, u.username, u.image_url, u.email, m.id as message_id, m.conversation_id as conversation_id, m.type, m.content, m.created_at FROM messages m
 JOIN users u ON u.id = m.sender_id
