@@ -12,6 +12,16 @@ INSERT INTO notification_deliveries (
 VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (event_id, recipient_id, subscription_id, channel) DO NOTHING;
 
+-- name: GetConversationNotificationRecipients :many
+-- Recipients are derived from the authoritative membership table instead of
+-- trusting a client-provided list. The sender is excluded because users do
+-- not need an offline notification for their own message.
+SELECT member_id
+FROM conversation_members
+WHERE conversation_id = $1
+  AND member_id <> $2
+ORDER BY member_id;
+
 -- name: ClaimNotificationDeliveries :many
 -- Lease a bounded batch so multiple delivery workers can operate concurrently
 -- without sending the same row at the same time. A stale processing lease is

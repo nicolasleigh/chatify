@@ -45,6 +45,42 @@ func (q *Queries) InsertNotificationDelivery(ctx context.Context, arg InsertNoti
 	return err
 }
 
+const getConversationNotificationRecipients = `-- name: GetConversationNotificationRecipients :many
+-- Recipients are derived from the authoritative membership table instead of
+-- trusting a client-provided list. The sender is excluded because users do
+-- not need an offline notification for their own message.
+SELECT member_id
+FROM conversation_members
+WHERE conversation_id = $1
+  AND member_id <> $2
+ORDER BY member_id
+`
+
+type GetConversationNotificationRecipientsParams struct {
+	ConversationID int64 `json:"conversation_id"`
+	SenderID       int64 `json:"sender_id"`
+}
+
+func (q *Queries) GetConversationNotificationRecipients(ctx context.Context, arg GetConversationNotificationRecipientsParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, getConversationNotificationRecipients, arg.ConversationID, arg.SenderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var memberID int64
+		if err := rows.Scan(&memberID); err != nil {
+			return nil, err
+		}
+		items = append(items, memberID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const claimNotificationDeliveries = `-- name: ClaimNotificationDeliveries :many
 -- Lease a bounded batch so multiple delivery workers can operate concurrently
 -- without sending the same row at the same time. A stale processing lease is
