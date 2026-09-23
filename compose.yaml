@@ -82,6 +82,10 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        # This is a public Web Push key and must be available while Next.js
+        # inlines NEXT_PUBLIC_* values into the browser bundle.
+        NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY: ${NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY:-}
     container_name: chatify-frontend
     env_file: "./frontend/.env.local"
     depends_on:

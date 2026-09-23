@@ -12,6 +12,11 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+ARG NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY
+# Next.js embeds NEXT_PUBLIC_* values into client bundles during this build.
+# The VAPID public key is safe to expose; the matching private key stays only
+# in the backend runtime environment.
+ENV NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY=$NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
