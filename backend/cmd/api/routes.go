@@ -17,7 +17,7 @@ func (app *application) NewRouter() http.Handler {
 	// User
 	mux.HandleFunc("POST /user", app.createUserHandler)
 	// Friend Request
-	mux.HandleFunc("POST /request", app.createRequest)
+	mux.Handle("POST /request", requireAuth(http.HandlerFunc(app.createRequest)))
 	mux.HandleFunc("DELETE /deny/{request_id}", app.denyRequest)
 	mux.HandleFunc("POST /request/accept/{request_id}", app.acceptRequest)
 	mux.Handle("GET /friends/{clerk_id}", requireAuth(http.HandlerFunc(app.getFriends)))

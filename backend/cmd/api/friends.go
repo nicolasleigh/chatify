@@ -15,14 +15,26 @@ func (app *application) createRequest(w http.ResponseWriter, r *http.Request) {
 	body := r.Body
 	defer body.Close()
 
-	var payload store.CreateRequestParams
+	clerkID, err := authenticatedClerkID(ctx)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-	err := readJSON(w, r, &payload)
+	var input struct {
+		Email string `json:"email"`
+	}
+
+	err = readJSON(w, r, &input)
 	if err != nil {
 		badRequestResponse(w, err)
 		return
 	}
 
+	payload := store.CreateRequestParams{
+		ClerkID: clerkID,
+		Email:   input.Email,
+	}
 	err = Validate.Struct(payload)
 	if err != nil {
 		badRequestResponse(w, err)

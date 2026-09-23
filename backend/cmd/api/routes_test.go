@@ -46,6 +46,18 @@ func TestFriendReadsRequireAuthentication(t *testing.T) {
 	}
 }
 
+func TestCreateFriendRequestRequiresAuthentication(t *testing.T) {
+	handler := (&application{}).NewRouter()
+	req := httptest.NewRequest(http.MethodPost, "/request", nil)
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)
+	}
+}
+
 func TestHealthRemainsPublic(t *testing.T) {
 	handler := (&application{}).NewRouter()
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
