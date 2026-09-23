@@ -50,8 +50,8 @@ WHERE id = $1;
 -- events can be retained as failed records for operational inspection.
 UPDATE outbox_events
 SET
-    status = $2,
-    available_at = NOW() + ($3::integer * INTERVAL '1 second'),
+    status = sqlc.arg(status),
+    available_at = NOW() + (sqlc.arg(retry_after_second)::integer * INTERVAL '1 second'),
     locked_at = NULL,
-    last_error = $4
-WHERE id = $1;
+    last_error = sqlc.arg(last_error)
+WHERE id = sqlc.arg(id);

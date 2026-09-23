@@ -196,10 +196,10 @@ func (c *Client) readPump(hub *Hub, app *application) {
 
 		// Store message in database
 		payload := store.CreateMessageWithOutboxParams{
-			Content:  msg.Content,
-			ID:       msg.ConversationID,
-			SenderID: c.senderID,
-			Type:     msg.Type,
+			Content:        msg.Content,
+			ConversationID: msg.ConversationID,
+			SenderID:       c.senderID,
+			Type:           msg.Type,
 		}
 
 		// Keep WebSocket writes on the same transactional outbox path as the

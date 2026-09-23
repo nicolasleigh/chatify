@@ -18,8 +18,8 @@ ON CONFLICT (event_id, recipient_id, subscription_id, channel) DO NOTHING;
 -- not need an offline notification for their own message.
 SELECT member_id
 FROM conversation_members
-WHERE conversation_id = $1
-  AND member_id <> $2
+WHERE conversation_id = sqlc.arg(conversation_id)
+  AND member_id <> sqlc.arg(sender_id)
 ORDER BY member_id;
 
 -- name: GetNotificationMessage :one
@@ -109,9 +109,9 @@ WHERE id = $1;
 -- skipped or failed with a zero delay and remain inspectable.
 UPDATE notification_deliveries
 SET
-    status = $2,
-    available_at = NOW() + ($3::integer * INTERVAL '1 second'),
+    status = sqlc.arg(status),
+    available_at = NOW() + (sqlc.arg(retry_after_second)::integer * INTERVAL '1 second'),
     locked_at = NULL,
-    last_error = $4,
+    last_error = sqlc.arg(last_error),
     updated_at = NOW()
-WHERE id = $1;
+WHERE id = sqlc.arg(id);

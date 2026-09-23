@@ -10,13 +10,13 @@ WITH messages_id AS (
     INSERT INTO messages (
         sender_id, conversation_id, type, content
     ) VALUES (
-        $1, $2, $3, $4
+        sqlc.arg(sender_id), sqlc.arg(conversation_id), sqlc.arg(type), sqlc.arg(content)
     )
     RETURNING id
 )
 UPDATE conversations
 SET last_message_id = (SELECT id FROM messages_id)
-WHERE conversations.id = $2
+WHERE conversations.id = sqlc.arg(conversation_id)
 RETURNING (SELECT id FROM messages_id) as message_id;
 
 -- name: CreateMessageWithOutbox :one
@@ -27,13 +27,13 @@ WITH messages_id AS (
     INSERT INTO messages (
         sender_id, conversation_id, type, content
     ) VALUES (
-        $1, $2, $3, $4
+        sqlc.arg(sender_id), sqlc.arg(conversation_id), sqlc.arg(type), sqlc.arg(content)
     )
     RETURNING id
 ), updated_conversation AS (
     UPDATE conversations
     SET last_message_id = (SELECT id FROM messages_id)
-    WHERE conversations.id = $2
+    WHERE conversations.id = sqlc.arg(conversation_id)
     RETURNING id
 ), inserted_outbox AS (
 INSERT INTO outbox_events (
@@ -50,13 +50,13 @@ SELECT
     messages_id.id,
     jsonb_build_object(
         'message_id', messages_id.id,
-        'conversation_id', $2,
-        'sender_id', $1,
-        'type', $3,
-        'content', $4
+        'conversation_id', sqlc.arg(conversation_id)::bigint,
+        'sender_id', sqlc.arg(sender_id)::bigint,
+        'type', sqlc.arg(type)::text,
+        'content', sqlc.arg(content)::text
     )
 FROM messages_id
-JOIN updated_conversation ON updated_conversation.id = $2
+JOIN updated_conversation ON updated_conversation.id = sqlc.arg(conversation_id)
 RETURNING aggregate_id AS message_id
 )
 SELECT message_id

@@ -26,7 +26,7 @@ type Presence interface {
 // RabbitMQ event.
 type DeliveryRepository interface {
 	GetConversationNotificationRecipients(ctx context.Context, arg store.GetConversationNotificationRecipientsParams) ([]int64, error)
-	GetEnabledPushSubscriptions(ctx context.Context, userID int64) ([]store.GetEnabledPushSubscriptionsRow, error)
+	GetEnabledPushSubscriptions(ctx context.Context, userID int64) ([]store.PushSubscription, error)
 	InsertNotificationDelivery(ctx context.Context, arg store.InsertNotificationDeliveryParams) error
 }
 

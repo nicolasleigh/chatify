@@ -11,109 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const insertNotificationDelivery = `-- name: InsertNotificationDelivery :exec
--- RabbitMQ provides at-least-once delivery. A conflict means this exact
--- event/recipient/subscription combination has already been scheduled and is
--- therefore a successful idempotent operation.
-INSERT INTO notification_deliveries (
-    event_id,
-    message_id,
-    recipient_id,
-    subscription_id,
-    channel
-)
-VALUES ($1, $2, $3, $4, $5)
-ON CONFLICT (event_id, recipient_id, subscription_id, channel) DO NOTHING
-`
-
-type InsertNotificationDeliveryParams struct {
-	EventID        int64  `json:"event_id"`
-	MessageID      int64  `json:"message_id"`
-	RecipientID    int64  `json:"recipient_id"`
-	SubscriptionID int64  `json:"subscription_id"`
-	Channel        string `json:"channel"`
-}
-
-func (q *Queries) InsertNotificationDelivery(ctx context.Context, arg InsertNotificationDeliveryParams) error {
-	_, err := q.db.Exec(ctx, insertNotificationDelivery,
-		arg.EventID,
-		arg.MessageID,
-		arg.RecipientID,
-		arg.SubscriptionID,
-		arg.Channel,
-	)
-	return err
-}
-
-const getConversationNotificationRecipients = `-- name: GetConversationNotificationRecipients :many
--- Recipients are derived from the authoritative membership table instead of
--- trusting a client-provided list. The sender is excluded because users do
--- not need an offline notification for their own message.
-SELECT member_id
-FROM conversation_members
-WHERE conversation_id = $1
-  AND member_id <> $2
-ORDER BY member_id
-`
-
-type GetConversationNotificationRecipientsParams struct {
-	ConversationID int64 `json:"conversation_id"`
-	SenderID       int64 `json:"sender_id"`
-}
-
-func (q *Queries) GetConversationNotificationRecipients(ctx context.Context, arg GetConversationNotificationRecipientsParams) ([]int64, error) {
-	rows, err := q.db.Query(ctx, getConversationNotificationRecipients, arg.ConversationID, arg.SenderID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []int64
-	for rows.Next() {
-		var memberID int64
-		if err := rows.Scan(&memberID); err != nil {
-			return nil, err
-		}
-		items = append(items, memberID)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getNotificationMessage = `-- name: GetNotificationMessage :one
--- Notification content is loaded at delivery time so the RabbitMQ event and
--- delivery table only carry stable IDs. If a message was removed before its
--- notification was sent, the worker can skip the delivery safely.
-SELECT
-    conversation.id AS conversation_id,
-    message.content,
-    sender.username AS sender_username,
-    conversation.name AS conversation_name
-FROM messages AS message
-JOIN users AS sender ON sender.id = message.sender_id
-JOIN conversations AS conversation ON conversation.id = message.conversation_id
-WHERE message.id = $1
-`
-
-type GetNotificationMessageRow struct {
-	ConversationID   int64   `json:"conversation_id"`
-	Content          *string `json:"content"`
-	SenderUsername   string  `json:"sender_username"`
-	ConversationName *string `json:"conversation_name"`
-}
-
-func (q *Queries) GetNotificationMessage(ctx context.Context, id int64) (GetNotificationMessageRow, error) {
-	row := q.db.QueryRow(ctx, getNotificationMessage, id)
-	var i GetNotificationMessageRow
-	err := row.Scan(&i.ConversationID, &i.Content, &i.SenderUsername, &i.ConversationName)
-	return i, err
-}
-
 const claimNotificationDeliveries = `-- name: ClaimNotificationDeliveries :many
--- Lease a bounded batch so multiple delivery workers can operate concurrently
--- without sending the same row at the same time. A stale processing lease is
--- eligible again after five minutes when a worker crashes.
 WITH candidates AS (
     SELECT id
     FROM notification_deliveries
@@ -158,6 +56,9 @@ type ClaimNotificationDeliveriesRow struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
+// Lease a bounded batch so multiple delivery workers can operate concurrently
+// without sending the same row at the same time. A stale processing lease is
+// eligible again after five minutes when a worker crashes.
 func (q *Queries) ClaimNotificationDeliveries(ctx context.Context, limit int32) ([]ClaimNotificationDeliveriesRow, error) {
 	rows, err := q.db.Query(ctx, claimNotificationDeliveries, limit)
 	if err != nil {
@@ -187,10 +88,43 @@ func (q *Queries) ClaimNotificationDeliveries(ctx context.Context, limit int32) 
 	return items, nil
 }
 
+const getConversationNotificationRecipients = `-- name: GetConversationNotificationRecipients :many
+SELECT member_id
+FROM conversation_members
+WHERE conversation_id = $1
+  AND member_id <> $2
+ORDER BY member_id
+`
+
+type GetConversationNotificationRecipientsParams struct {
+	ConversationID int64 `json:"conversation_id"`
+	SenderID       int64 `json:"sender_id"`
+}
+
+// Recipients are derived from the authoritative membership table instead of
+// trusting a client-provided list. The sender is excluded because users do
+// not need an offline notification for their own message.
+func (q *Queries) GetConversationNotificationRecipients(ctx context.Context, arg GetConversationNotificationRecipientsParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, getConversationNotificationRecipients, arg.ConversationID, arg.SenderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var member_id int64
+		if err := rows.Scan(&member_id); err != nil {
+			return nil, err
+		}
+		items = append(items, member_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getNotificationDelivery = `-- name: GetNotificationDelivery :one
--- The subscription is read after claiming the delivery. Joining here keeps
--- endpoint credentials out of the queue event and lets disabled endpoints be
--- skipped without contacting a push provider.
 SELECT
     delivery.id,
     delivery.event_id,
@@ -225,6 +159,9 @@ type GetNotificationDeliveryRow struct {
 	Enabled        *bool              `json:"enabled"`
 }
 
+// The subscription is read after claiming the delivery. Joining here keeps
+// endpoint credentials out of the queue event and lets disabled endpoints be
+// skipped without contacting a push provider.
 func (q *Queries) GetNotificationDelivery(ctx context.Context, id int64) (GetNotificationDeliveryRow, error) {
 	row := q.db.QueryRow(ctx, getNotificationDelivery, id)
 	var i GetNotificationDeliveryRow
@@ -245,32 +182,100 @@ func (q *Queries) GetNotificationDelivery(ctx context.Context, id int64) (GetNot
 	return i, err
 }
 
+const getNotificationMessage = `-- name: GetNotificationMessage :one
+SELECT
+    conversation.id AS conversation_id,
+    message.content,
+    sender.username AS sender_username,
+    conversation.name AS conversation_name
+FROM messages AS message
+JOIN users AS sender ON sender.id = message.sender_id
+JOIN conversations AS conversation ON conversation.id = message.conversation_id
+WHERE message.id = $1
+`
+
+type GetNotificationMessageRow struct {
+	ConversationID   int64   `json:"conversation_id"`
+	Content          *string `json:"content"`
+	SenderUsername   string  `json:"sender_username" validate:"required,min=1,max=100"`
+	ConversationName *string `json:"conversation_name"`
+}
+
+// Notification content is loaded at delivery time so the RabbitMQ event and
+// delivery table only carry stable IDs. If a message was removed before its
+// notification was sent, the worker can skip the delivery safely.
+func (q *Queries) GetNotificationMessage(ctx context.Context, id int64) (GetNotificationMessageRow, error) {
+	row := q.db.QueryRow(ctx, getNotificationMessage, id)
+	var i GetNotificationMessageRow
+	err := row.Scan(
+		&i.ConversationID,
+		&i.Content,
+		&i.SenderUsername,
+		&i.ConversationName,
+	)
+	return i, err
+}
+
+const insertNotificationDelivery = `-- name: InsertNotificationDelivery :exec
+INSERT INTO notification_deliveries (
+    event_id,
+    message_id,
+    recipient_id,
+    subscription_id,
+    channel
+)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (event_id, recipient_id, subscription_id, channel) DO NOTHING
+`
+
+type InsertNotificationDeliveryParams struct {
+	EventID        int64  `json:"event_id"`
+	MessageID      int64  `json:"message_id"`
+	RecipientID    int64  `json:"recipient_id"`
+	SubscriptionID int64  `json:"subscription_id"`
+	Channel        string `json:"channel"`
+}
+
+// RabbitMQ provides at-least-once delivery. A conflict means this exact
+// event/recipient/subscription combination has already been scheduled and is
+// therefore a successful idempotent operation.
+func (q *Queries) InsertNotificationDelivery(ctx context.Context, arg InsertNotificationDeliveryParams) error {
+	_, err := q.db.Exec(ctx, insertNotificationDelivery,
+		arg.EventID,
+		arg.MessageID,
+		arg.RecipientID,
+		arg.SubscriptionID,
+		arg.Channel,
+	)
+	return err
+}
+
 const markNotificationDeliveryFailed = `-- name: MarkNotificationDeliveryFailed :exec
--- The worker supplies the next status and retry delay. Permanent failures use
--- skipped or failed with a zero delay and remain inspectable.
 UPDATE notification_deliveries
 SET
-    status = $2,
-    available_at = NOW() + ($3::integer * INTERVAL '1 second'),
+    status = $1,
+    available_at = NOW() + ($2::integer * INTERVAL '1 second'),
     locked_at = NULL,
-    last_error = $4,
+    last_error = $3,
     updated_at = NOW()
-WHERE id = $1
+WHERE id = $4
 `
 
 type MarkNotificationDeliveryFailedParams struct {
-	ID               int64   `json:"id"`
 	Status           string  `json:"status"`
 	RetryAfterSecond int32   `json:"retry_after_second"`
 	LastError        *string `json:"last_error"`
+	ID               int64   `json:"id"`
 }
 
+// The worker supplies the next status and retry delay. Permanent failures use
+// skipped or failed with a zero delay and remain inspectable.
 func (q *Queries) MarkNotificationDeliveryFailed(ctx context.Context, arg MarkNotificationDeliveryFailedParams) error {
 	_, err := q.db.Exec(ctx, markNotificationDeliveryFailed,
-		arg.ID,
 		arg.Status,
 		arg.RetryAfterSecond,
 		arg.LastError,
+		arg.ID,
 	)
 	return err
 }

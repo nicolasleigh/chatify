@@ -16,27 +16,27 @@ WITH messages_id AS (
     INSERT INTO messages (
         sender_id, conversation_id, type, content
     ) VALUES (
-        $1, $2, $3, $4
+        $2, $1, $3, $4
     )
     RETURNING id
 )
 UPDATE conversations
 SET last_message_id = (SELECT id FROM messages_id)
-WHERE conversations.id = $2
+WHERE conversations.id = $1
 RETURNING (SELECT id FROM messages_id) as message_id
 `
 
 type CreateMessageParams struct {
-	SenderID int64   `json:"sender_id"`
-	ID       int64   `json:"id"`
-	Type     *string `json:"type"`
-	Content  *string `json:"content"`
+	ConversationID int64   `json:"conversation_id"`
+	SenderID       int64   `json:"sender_id"`
+	Type           *string `json:"type"`
+	Content        *string `json:"content"`
 }
 
 func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (int64, error) {
 	row := q.db.QueryRow(ctx, createMessage,
+		arg.ConversationID,
 		arg.SenderID,
-		arg.ID,
 		arg.Type,
 		arg.Content,
 	)
@@ -46,9 +46,6 @@ func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (i
 }
 
 const createMessageWithOutbox = `-- name: CreateMessageWithOutbox :one
--- Keep the message write, conversation preview update, and event creation in
--- one SQL statement. PostgreSQL commits all data-modifying CTEs atomically, so
--- the worker can never publish an event for a message that was rolled back.
 WITH messages_id AS (
     INSERT INTO messages (
         sender_id, conversation_id, type, content
@@ -76,10 +73,10 @@ SELECT
     messages_id.id,
     jsonb_build_object(
         'message_id', messages_id.id,
-        'conversation_id', $2,
-        'sender_id', $1,
-        'type', $3,
-        'content', $4
+        'conversation_id', $2::bigint,
+        'sender_id', $1::bigint,
+        'type', $3::text,
+        'content', $4::text
     )
 FROM messages_id
 JOIN updated_conversation ON updated_conversation.id = $2
@@ -90,16 +87,19 @@ FROM inserted_outbox
 `
 
 type CreateMessageWithOutboxParams struct {
-	SenderID int64   `json:"sender_id"`
-	ID       int64   `json:"id"`
-	Type     *string `json:"type"`
-	Content  *string `json:"content"`
+	SenderID       int64   `json:"sender_id"`
+	ConversationID int64   `json:"conversation_id"`
+	Type           *string `json:"type"`
+	Content        *string `json:"content"`
 }
 
+// Keep the message write, conversation preview update, and event creation in
+// one SQL statement. PostgreSQL commits all data-modifying CTEs atomically, so
+// the worker can never publish an event for a message that was rolled back.
 func (q *Queries) CreateMessageWithOutbox(ctx context.Context, arg CreateMessageWithOutboxParams) (int64, error) {
 	row := q.db.QueryRow(ctx, createMessageWithOutbox,
 		arg.SenderID,
-		arg.ID,
+		arg.ConversationID,
 		arg.Type,
 		arg.Content,
 	)

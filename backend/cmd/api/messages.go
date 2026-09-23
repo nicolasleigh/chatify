@@ -40,7 +40,7 @@ func (app *application) createMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	payload.Content = body.Content
-	payload.ID = body.ConversationID
+	payload.ConversationID = body.ConversationID
 	payload.SenderID = localUser.ID
 	payload.Type = body.Type
 

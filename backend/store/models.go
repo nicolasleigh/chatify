@@ -49,6 +49,54 @@ type Message struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
+type NotificationDelivery struct {
+	ID             int64              `json:"id"`
+	EventID        int64              `json:"event_id"`
+	MessageID      int64              `json:"message_id"`
+	RecipientID    int64              `json:"recipient_id"`
+	SubscriptionID int64              `json:"subscription_id"`
+	Channel        string             `json:"channel"`
+	Status         string             `json:"status"`
+	Attempts       int32              `json:"attempts"`
+	AvailableAt    pgtype.Timestamptz `json:"available_at"`
+	LockedAt       pgtype.Timestamptz `json:"locked_at"`
+	SentAt         pgtype.Timestamptz `json:"sent_at"`
+	LastError      *string            `json:"last_error"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type OutboxEvent struct {
+	ID            int64              `json:"id"`
+	EventType     string             `json:"event_type"`
+	EventVersion  int32              `json:"event_version"`
+	AggregateType string             `json:"aggregate_type"`
+	AggregateID   int64              `json:"aggregate_id"`
+	Payload       []byte             `json:"payload"`
+	Status        string             `json:"status"`
+	Attempts      int32              `json:"attempts"`
+	AvailableAt   pgtype.Timestamptz `json:"available_at"`
+	LockedAt      pgtype.Timestamptz `json:"locked_at"`
+	PublishedAt   pgtype.Timestamptz `json:"published_at"`
+	LastError     *string            `json:"last_error"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
+type PushSubscription struct {
+	ID          int64              `json:"id"`
+	UserID      int64              `json:"user_id"`
+	Endpoint    string             `json:"endpoint"`
+	P256dh      string             `json:"p256dh"`
+	Auth        string             `json:"auth"`
+	UserAgent   *string            `json:"user_agent"`
+	DeviceLabel *string            `json:"device_label"`
+	Enabled     bool               `json:"enabled"`
+	LastUsedAt  pgtype.Timestamptz `json:"last_used_at"`
+	DisabledAt  pgtype.Timestamptz `json:"disabled_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
 type User struct {
 	ID        int64              `json:"id"`
 	Username  string             `json:"username" validate:"required,min=1,max=100"`

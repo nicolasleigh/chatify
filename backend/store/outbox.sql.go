@@ -12,9 +12,6 @@ import (
 )
 
 const claimOutboxEvents = `-- name: ClaimOutboxEvents :many
--- Claim a bounded batch with row locks. SKIP LOCKED lets multiple API
--- instances run workers concurrently without waiting on one another, while
--- the lease condition recovers rows from a worker that crashed mid-publish.
 WITH candidates AS (
     SELECT id
     FROM outbox_events
@@ -58,6 +55,9 @@ type ClaimOutboxEventsRow struct {
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 }
 
+// Claim a bounded batch with row locks. SKIP LOCKED lets multiple API
+// instances run workers concurrently without waiting on one another, while
+// the lease condition recovers rows from a worker that crashed mid-publish.
 func (q *Queries) ClaimOutboxEvents(ctx context.Context, limit int32) ([]ClaimOutboxEventsRow, error) {
 	rows, err := q.db.Query(ctx, claimOutboxEvents, limit)
 	if err != nil {
@@ -88,38 +88,36 @@ func (q *Queries) ClaimOutboxEvents(ctx context.Context, limit int32) ([]ClaimOu
 }
 
 const markOutboxEventFailed = `-- name: MarkOutboxEventFailed :exec
--- The worker chooses the next status and retry time. Keeping this update
--- generic allows transient failures to return to pending while exhausted
--- events can be retained as failed records for operational inspection.
 UPDATE outbox_events
 SET
-    status = $2,
-    available_at = NOW() + ($3::integer * INTERVAL '1 second'),
+    status = $1,
+    available_at = NOW() + ($2::integer * INTERVAL '1 second'),
     locked_at = NULL,
-    last_error = $4
-WHERE id = $1
+    last_error = $3
+WHERE id = $4
 `
 
 type MarkOutboxEventFailedParams struct {
-	ID               int64   `json:"id"`
 	Status           string  `json:"status"`
 	RetryAfterSecond int32   `json:"retry_after_second"`
 	LastError        *string `json:"last_error"`
+	ID               int64   `json:"id"`
 }
 
+// The worker chooses the next status and retry time. Keeping this update
+// generic allows transient failures to return to pending while exhausted
+// events can be retained as failed records for operational inspection.
 func (q *Queries) MarkOutboxEventFailed(ctx context.Context, arg MarkOutboxEventFailedParams) error {
 	_, err := q.db.Exec(ctx, markOutboxEventFailed,
-		arg.ID,
 		arg.Status,
 		arg.RetryAfterSecond,
 		arg.LastError,
+		arg.ID,
 	)
 	return err
 }
 
 const markOutboxEventPublished = `-- name: MarkOutboxEventPublished :exec
--- A successful publisher confirmation is the only point at which an event
--- becomes published. The row remains for auditability and deduplication.
 UPDATE outbox_events
 SET
     status = 'published',
@@ -129,6 +127,8 @@ SET
 WHERE id = $1
 `
 
+// A successful publisher confirmation is the only point at which an event
+// becomes published. The row remains for auditability and deduplication.
 func (q *Queries) MarkOutboxEventPublished(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, markOutboxEventPublished, id)
 	return err

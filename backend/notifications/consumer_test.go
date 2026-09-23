@@ -43,7 +43,7 @@ func (testDeliveryRepository) GetConversationNotificationRecipients(context.Cont
 	return nil, nil
 }
 
-func (testDeliveryRepository) GetEnabledPushSubscriptions(context.Context, int64) ([]store.GetEnabledPushSubscriptionsRow, error) {
+func (testDeliveryRepository) GetEnabledPushSubscriptions(context.Context, int64) ([]store.PushSubscription, error) {
 	return nil, nil
 }
 

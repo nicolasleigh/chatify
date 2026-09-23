@@ -7,15 +7,116 @@ package store
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const disablePushSubscription = `-- name: DisablePushSubscription :exec
+UPDATE push_subscriptions
+SET
+    enabled = false,
+    disabled_at = NOW(),
+    updated_at = NOW()
+WHERE id = $1
+  AND user_id = $2
+`
+
+type DisablePushSubscriptionParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+// Ownership is part of the predicate so one user cannot disable another
+// user's browser endpoint even if an ID is guessed.
+func (q *Queries) DisablePushSubscription(ctx context.Context, arg DisablePushSubscriptionParams) error {
+	_, err := q.db.Exec(ctx, disablePushSubscription, arg.ID, arg.UserID)
+	return err
+}
+
+const disablePushSubscriptionByEndpoint = `-- name: DisablePushSubscriptionByEndpoint :exec
+UPDATE push_subscriptions
+SET
+    enabled = false,
+    disabled_at = NOW(),
+    updated_at = NOW()
+WHERE endpoint = $1
+`
+
+// Push providers commonly identify an invalid subscription by endpoint. This
+// operation is intentionally scoped to the endpoint and can be called by the
+// trusted delivery worker after a permanent provider response.
+func (q *Queries) DisablePushSubscriptionByEndpoint(ctx context.Context, endpoint string) error {
+	_, err := q.db.Exec(ctx, disablePushSubscriptionByEndpoint, endpoint)
+	return err
+}
+
+const getEnabledPushSubscriptions = `-- name: GetEnabledPushSubscriptions :many
+SELECT
+    id,
+    user_id,
+    endpoint,
+    p256dh,
+    auth,
+    user_agent,
+    device_label,
+    enabled,
+    last_used_at,
+    disabled_at,
+    created_at,
+    updated_at
+FROM push_subscriptions
+WHERE user_id = $1
+  AND enabled = true
+ORDER BY id
+`
+
+// The notification consumer only needs currently enabled endpoints. Disabled
+// rows remain available for auditing and are excluded at the database layer.
+func (q *Queries) GetEnabledPushSubscriptions(ctx context.Context, userID int64) ([]PushSubscription, error) {
+	rows, err := q.db.Query(ctx, getEnabledPushSubscriptions, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PushSubscription
+	for rows.Next() {
+		var i PushSubscription
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Endpoint,
+			&i.P256dh,
+			&i.Auth,
+			&i.UserAgent,
+			&i.DeviceLabel,
+			&i.Enabled,
+			&i.LastUsedAt,
+			&i.DisabledAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markPushSubscriptionUsed = `-- name: MarkPushSubscriptionUsed :exec
+UPDATE push_subscriptions
+SET
+    last_used_at = NOW(),
+    updated_at = NOW()
+WHERE id = $1
+`
+
+func (q *Queries) MarkPushSubscriptionUsed(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, markPushSubscriptionUsed, id)
+	return err
+}
+
 const upsertPushSubscription = `-- name: UpsertPushSubscription :one
--- Registering the same browser subscription repeatedly is safe. If a browser
--- logs out and another user later signs in on it, ownership is transferred
--- only through this authenticated endpoint and the old disabled state is
--- cleared for the new delivery owner.
 INSERT INTO push_subscriptions (
     user_id,
     endpoint,
@@ -61,22 +162,11 @@ type UpsertPushSubscriptionParams struct {
 	DeviceLabel *string `json:"device_label"`
 }
 
-type UpsertPushSubscriptionRow struct {
-	ID          int64              `json:"id"`
-	UserID      int64              `json:"user_id"`
-	Endpoint    string             `json:"endpoint"`
-	P256dh      string             `json:"p256dh"`
-	Auth        string             `json:"auth"`
-	UserAgent   *string            `json:"user_agent"`
-	DeviceLabel *string            `json:"device_label"`
-	Enabled     bool               `json:"enabled"`
-	LastUsedAt  pgtype.Timestamptz `json:"last_used_at"`
-	DisabledAt  pgtype.Timestamptz `json:"disabled_at"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-}
-
-func (q *Queries) UpsertPushSubscription(ctx context.Context, arg UpsertPushSubscriptionParams) (UpsertPushSubscriptionRow, error) {
+// Registering the same browser subscription repeatedly is safe. If a browser
+// logs out and another user later signs in on it, ownership is transferred
+// only through this authenticated endpoint and the old disabled state is
+// cleared for the new delivery owner.
+func (q *Queries) UpsertPushSubscription(ctx context.Context, arg UpsertPushSubscriptionParams) (PushSubscription, error) {
 	row := q.db.QueryRow(ctx, upsertPushSubscription,
 		arg.UserID,
 		arg.Endpoint,
@@ -85,7 +175,7 @@ func (q *Queries) UpsertPushSubscription(ctx context.Context, arg UpsertPushSubs
 		arg.UserAgent,
 		arg.DeviceLabel,
 	)
-	var i UpsertPushSubscriptionRow
+	var i PushSubscription
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
@@ -101,126 +191,4 @@ func (q *Queries) UpsertPushSubscription(ctx context.Context, arg UpsertPushSubs
 		&i.UpdatedAt,
 	)
 	return i, err
-}
-
-const getEnabledPushSubscriptions = `-- name: GetEnabledPushSubscriptions :many
--- The notification consumer only needs currently enabled endpoints. Disabled
--- rows remain available for auditing and are excluded at the database layer.
-SELECT
-    id,
-    user_id,
-    endpoint,
-    p256dh,
-    auth,
-    user_agent,
-    device_label,
-    enabled,
-    last_used_at,
-    disabled_at,
-    created_at,
-    updated_at
-FROM push_subscriptions
-WHERE user_id = $1
-  AND enabled = true
-ORDER BY id
-`
-
-type GetEnabledPushSubscriptionsRow struct {
-	ID          int64              `json:"id"`
-	UserID      int64              `json:"user_id"`
-	Endpoint    string             `json:"endpoint"`
-	P256dh      string             `json:"p256dh"`
-	Auth        string             `json:"auth"`
-	UserAgent   *string            `json:"user_agent"`
-	DeviceLabel *string            `json:"device_label"`
-	Enabled     bool               `json:"enabled"`
-	LastUsedAt  pgtype.Timestamptz `json:"last_used_at"`
-	DisabledAt  pgtype.Timestamptz `json:"disabled_at"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-}
-
-func (q *Queries) GetEnabledPushSubscriptions(ctx context.Context, userID int64) ([]GetEnabledPushSubscriptionsRow, error) {
-	rows, err := q.db.Query(ctx, getEnabledPushSubscriptions, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetEnabledPushSubscriptionsRow
-	for rows.Next() {
-		var i GetEnabledPushSubscriptionsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.Endpoint,
-			&i.P256dh,
-			&i.Auth,
-			&i.UserAgent,
-			&i.DeviceLabel,
-			&i.Enabled,
-			&i.LastUsedAt,
-			&i.DisabledAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const disablePushSubscription = `-- name: DisablePushSubscription :exec
--- Ownership is part of the predicate so one user cannot disable another
--- user's browser endpoint even if an ID is guessed.
-UPDATE push_subscriptions
-SET
-    enabled = false,
-    disabled_at = NOW(),
-    updated_at = NOW()
-WHERE id = $1
-  AND user_id = $2
-`
-
-type DisablePushSubscriptionParams struct {
-	ID     int64 `json:"id"`
-	UserID int64 `json:"user_id"`
-}
-
-func (q *Queries) DisablePushSubscription(ctx context.Context, arg DisablePushSubscriptionParams) error {
-	_, err := q.db.Exec(ctx, disablePushSubscription, arg.ID, arg.UserID)
-	return err
-}
-
-const disablePushSubscriptionByEndpoint = `-- name: DisablePushSubscriptionByEndpoint :exec
--- Push providers commonly identify an invalid subscription by endpoint. This
--- operation is intentionally scoped to the endpoint and can be called by the
--- trusted delivery worker after a permanent provider response.
-UPDATE push_subscriptions
-SET
-    enabled = false,
-    disabled_at = NOW(),
-    updated_at = NOW()
-WHERE endpoint = $1
-`
-
-func (q *Queries) DisablePushSubscriptionByEndpoint(ctx context.Context, endpoint string) error {
-	_, err := q.db.Exec(ctx, disablePushSubscriptionByEndpoint, endpoint)
-	return err
-}
-
-const markPushSubscriptionUsed = `-- name: MarkPushSubscriptionUsed :exec
-UPDATE push_subscriptions
-SET
-    last_used_at = NOW(),
-    updated_at = NOW()
-WHERE id = $1
-`
-
-func (q *Queries) MarkPushSubscriptionUsed(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, markPushSubscriptionUsed, id)
-	return err
 }
