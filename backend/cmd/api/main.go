@@ -64,18 +64,20 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	pg, err := pg.NewPG(ctx, cfg.db.dsn)
+	db, err := pg.NewPG(ctx, cfg.db.dsn)
 	if err != nil {
-		slog.Error(err.Error())
+		slog.Error("database connection pool initialization failed", "error", err)
+		os.Exit(1)
 	}
-	defer pg.Close()
+	defer db.Close()
 
-	err = pg.Ping(ctx)
+	err = db.Ping(ctx)
 	if err != nil {
-		slog.Error(err.Error())
+		slog.Error("database ping failed", "error", err)
+		os.Exit(1)
 	}
 
-	q := store.New(pg.DB)
+	q := store.New(db.DB)
 
 	slog.Info("database connection pool established!")
 
