@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/nicolasleigh/chat-app/store"
 )
@@ -95,8 +97,13 @@ func (app *application) createGroup(w http.ResponseWriter, r *http.Request) {
 		badRequestResponse(w, err)
 		return
 	}
+	if err := validateGroupInput(body.Name, body.Member_id_arr); err != nil {
+		badRequestResponse(w, err)
+		return
+	}
 
-	payload.Name = &body.Name
+	name := strings.TrimSpace(body.Name)
+	payload.Name = &name
 	payload.Column3 = body.Member_id_arr
 	payload.ClerkID = clerkID
 
@@ -111,6 +118,36 @@ func (app *application) createGroup(w http.ResponseWriter, r *http.Request) {
 		badRequestResponse(w, err)
 		return
 	}
+}
+
+const maxGroupMembers = 100
+
+func validateGroupInput(name string, memberIDs []int64) error {
+	if strings.TrimSpace(name) == "" {
+		return errors.New("group name is required")
+	}
+	if len(name) > 200 {
+		return errors.New("group name is too long")
+	}
+	if len(memberIDs) == 0 {
+		return errors.New("at least one group member is required")
+	}
+	if len(memberIDs) > maxGroupMembers {
+		return errors.New("too many group members")
+	}
+
+	seen := make(map[int64]struct{}, len(memberIDs))
+	for _, memberID := range memberIDs {
+		if memberID <= 0 {
+			return errors.New("group member IDs must be positive")
+		}
+		if _, exists := seen[memberID]; exists {
+			return errors.New("group member IDs must be unique")
+		}
+		seen[memberID] = struct{}{}
+	}
+
+	return nil
 }
 
 func (app *application) leaveGroup(w http.ResponseWriter, r *http.Request) {
